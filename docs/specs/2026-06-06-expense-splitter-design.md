@@ -24,8 +24,8 @@ Single user (the owner). No cloud database, no accounts. All data is local files
 | Statement sources | **Any bank** via the harness (Apple Card, Chase, Amex, …) as long as the PDF has selectable text. The built-in **offline** parser handles **Apple Card** to start. |
 | Ingest paths | (a) **Upload in the app** for one-offs; (b) **harness scans a configured statement folder** via Claude Code. |
 | Accuracy | Harness must **self-verify**: re-read, reconcile to the statement's own totals, and produce a verification report. No tolerance for misreads or math errors. |
-| Platform | Local **browser app** served by a tiny local **Node** server. No cloud, no external database. |
-| Intelligence | **Hybrid.** Offline keyword categorizer + Apple Card parser; or launch via **Claude Code** for multi-bank reading + smart categorization. |
+| Platform | Local **browser app** served by a tiny local **Python** server (stdlib `http.server`, zero extra runtime). No cloud, no external database. |
+| Intelligence | **Hybrid.** Offline keyword categorizer + Apple Card parser (Python); or launch via **Claude Code**, which can call the same parser deterministically and add multi-bank reading + smart categorization. |
 | Storage | JSON files on disk: `expenses.json`, `rules.json`, settings. |
 | Merchant rules | Matched by **merchant name only** (tagging "Starbucks" covers all Starbucks). |
 | People | Named **contacts** (e.g. "Nitin"). Default partner + default split configurable in Settings. |
@@ -176,33 +176,42 @@ After review, **Submit** locks in the tagging and shows a **totals summary**: ho
 
 ## 10. Tech & architecture
 
-- **Node** tiny local server: serves the frontend; read/write `expenses.json`,
-  `rules.json`, `settings.json`; hosts shared logic so it runs without Claude Code.
-- **Shared JS modules** (server + browser, unit-tested):
-  - `parser` — Apple Card PDF → transactions (`pdfjs-dist`).
+- **Python 3** (stdlib only + `pypdf`): a tiny local server (`http.server`) serves the
+  frontend and reads/writes `expenses.json`, `rules.json`, `settings.json`. No web
+  framework, no Node, no build step.
+- **Python modules** (unit-tested with built-in `unittest`):
+  - `parser` — Apple Card PDF/text → transactions (`pypdf` for text extraction).
   - `categorizer` — keyword dictionary + rule application.
   - `splitter` — split math + CSV generation.
   - `totals` — per-person totals from tagged expenses.
-- **Frontend:** plain HTML/CSS/JS.
+- **Frontend:** plain HTML/CSS/JS (vanilla), talks to the local server via `fetch`. The
+  browser is a thin UI; all parsing/logic lives server-side in Python (one implementation,
+  reused by both app-upload and harness modes).
 - **`LAUNCH.md`:** exact copy-paste prompt that tells a Claude Code session to scan the
-  statement folder, parse **any** bank's statements, run the **self-verification
+  statement folder, run the deterministic Python parser, apply the **self-verification
   protocol (§6)**, apply `rules.json`, write `expenses.json`, start the server, open the app.
 
 ### Module boundaries
 
 | Module | Does | Depends on |
 |---|---|---|
-| `parser` | PDF bytes → `[{date, description, amount, ...}]` | `pdfjs-dist` |
-| `categorizer` | transaction + rules → `{category, status, split}` | `rules.json` shape |
-| `splitter` | expenses → per-person/combined CSV strings | data model |
-| `totals` | expenses → per-person owed amounts | data model |
-| `server` | persistence + serving | parser, categorizer, splitter, totals |
+| `money` | integer-cent math (no float errors) | stdlib |
+| `merchant` | description → normalized merchant + match key | stdlib |
+| `parser` | PDF/text → `[{date, description, amount, ...}]` + reconciliation | `pypdf` |
+| `categorizer` | merchant + rules → `{category, status, split}` | `rules.json` shape |
+| `splitter` | expenses → per-person/combined CSV strings | data model, `money` |
+| `totals` | expenses → per-person owed amounts | data model, `money` |
+| `store` | read/write JSON data files | stdlib |
+| `server` | persistence + serving | all of the above |
 | `frontend` | UI for review/tag/submit/export | server endpoints |
 
 ## 11. Testing
 
-- `parser` against the **real January 2026 Apple Card statement** fixture (count,
-  amounts, merchant extraction, Payments excluded, **reconciles to statement total**).
+- `python3 -m unittest` (built-in, zero install).
+- `parser` against a committed **synthetic Apple Card text fixture** (count, amounts,
+  merchant extraction, Payments excluded, **reconciles to statement total**), plus an
+  **optional integration test** against the real January 2026 PDF that skips when the
+  file is absent (the real statement is never committed).
 - `splitter` (equal, custom, exclude-self, per-person vs combined CSV).
 - `totals` (per-person sums; integrity check that shares reconcile to amounts).
 - `categorizer` (keyword hits, rule precedence, Miscellaneous fallback, learning).
