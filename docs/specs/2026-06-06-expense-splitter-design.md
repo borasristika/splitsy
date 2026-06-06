@@ -5,155 +5,188 @@
 
 ## 1. Purpose
 
-A personal, local app that ingests credit-card / bank statements (starting with
-Apple Card PDFs), turns them into a reviewable list of expenses, and helps the
-user decide which expenses are **personal** vs **split with other people** — then
-exports a CSV the user can send to those people for review.
+A personal **harness + app** for turning credit-card / bank statements into a
+reviewed list of expenses, deciding which are **personal** vs **split with other
+people**, and exporting CSVs to send those people for review — ending with a clear
+total of how much each person owes.
 
-The app is for one user (the owner). There is no multi-user account system and no
-cloud database. All data lives in local files on the user's machine.
+- The **app** is a local browser UI for reviewing, tagging, and exporting.
+- The **harness** is a Claude Code workflow: point it at a folder of downloaded
+  statements (Apple Card, Chase, Amex, anything with selectable text), and it reads,
+  normalizes, and **self-verifies** them into the app's common format.
+
+Single user (the owner). No cloud database, no accounts. All data is local files.
 
 ## 2. Key decisions (settled during brainstorming)
 
 | Topic | Decision |
 |---|---|
-| Statement format | Apple Card **PDF** (clean, selectable text — verified against a real January 2026 statement). Other banks may come later. |
+| Statement sources | **Any bank** via the harness (Apple Card, Chase, Amex, …) as long as the PDF has selectable text. The built-in **offline** parser handles **Apple Card** to start. |
+| Ingest paths | (a) **Upload in the app** for one-offs; (b) **harness scans a configured statement folder** via Claude Code. |
+| Accuracy | Harness must **self-verify**: re-read, reconcile to the statement's own totals, and produce a verification report. No tolerance for misreads or math errors. |
 | Platform | Local **browser app** served by a tiny local **Node** server. No cloud, no external database. |
-| Intelligence | **Hybrid.** Works fully offline with a keyword categorizer; can be launched through **Claude Code** for smart LLM categorization. |
-| Storage | JSON files on disk: `expenses.json`, `rules.json`, `people.json`/settings. |
-| Merchant rules | Matched by **merchant name only** (e.g. tagging "Starbucks" covers all Starbucks locations). |
+| Intelligence | **Hybrid.** Offline keyword categorizer + Apple Card parser; or launch via **Claude Code** for multi-bank reading + smart categorization. |
+| Storage | JSON files on disk: `expenses.json`, `rules.json`, settings. |
+| Merchant rules | Matched by **merchant name only** (tagging "Starbucks" covers all Starbucks). |
 | People | Named **contacts** (e.g. "Nitin"). Default partner + default split configurable in Settings. |
-| Default per expense | Apply saved rule → else **Split 2 ways with default partner (Nitin)**. Category guessed (keyword or Claude); unsure → **Miscellaneous**. |
+| Default per expense | Apply saved rule → else **Split 2 ways with default partner (Nitin)**. Category guessed; unsure → **Miscellaneous**. |
 | Split math | **Equal by default, you included**; override per expense for more people, custom shares, or excluding yourself. |
 | Personal / Split actions | Each has **"once"** (this instance) and **"always this merchant"** (a remembered rule). |
-| Remove button | Equivalent to **Personal (once)** — pulls the expense out of any split. No separate hard-delete. |
-| Categories | Built-in buckets + new ones discovered over time. Re-categorizing a merchant is remembered. Miscellaneous shown last. |
-| CSV export | **Per-person** and **combined**, both available. |
-| Launch prompt | A `LAUNCH.md` file with an exact copy-paste prompt for the Claude Code smart-mode flow. |
+| Remove button | Equivalent to **Personal (once)**. No separate hard-delete. |
+| Categories | Built-in buckets + new ones over time. Re-categorizing a merchant is remembered. Miscellaneous shown last. |
+| Submit → Totals | After review, **Submit** computes how much **each person owes**. |
+| Export | **Review and publish** CSVs: **per-person** and **combined**. |
+| Launch prompt | A `LAUNCH.md` file with an exact copy-paste prompt that includes the parse + **self-verification** protocol. |
 
 ## 3. Two ways to use the app
 
 One codebase, one set of data files, two ingest paths:
 
-| | Offline mode | Smart mode (Claude Code) |
+| | App-upload mode | Harness mode (Claude Code) |
 |---|---|---|
-| Launch | One-line start command (or Claude Code starts it) | Paste the `LAUNCH.md` prompt into a Claude Code session |
-| Parse PDF | Built-in parser | Same built-in parser |
-| Categorize | Keyword dictionary (learns from corrections) | Claude Code reasons over merchants, may invent new categories |
-| Result | Upload in browser, then tag & export | App opens already grouped, then tag & export |
+| Launch | One-line start command | Paste the `LAUNCH.md` prompt into a Claude Code session |
+| Statement source | Files you pick in the browser | A **configured folder** Claude Code scans |
+| Banks supported | Built-in parsers (Apple Card to start) | **Any** text-based statement, via reasoning |
+| Categorize | Keyword dictionary (learns from corrections) | Claude reasons over merchants, may add categories |
+| Accuracy | Deterministic parser + unit tests | **Self-verification protocol** (see §6) |
+| Result | Upload in browser, then tag & export | App opens already grouped + verified, then tag & export |
 
-Both modes read and write the **same files**, so corrections made in one mode are
-respected by the other. Smart mode always applies the user's saved `rules.json`
-first, and only reasons about merchants that have no rule yet.
+Both modes read/write the **same files**, so corrections in one are respected by the
+other. The harness always applies saved `rules.json` first, then reasons only about
+merchants with no rule yet.
 
 ### Privacy note
 
-In **offline mode**, nothing leaves the machine. In **smart mode**, statement
-text passes through Anthropic's cloud (because the model runs there) during
-categorization — the same data exposure as the Anthropic API, but riding on the
-user's existing Claude Code session with no separate key or per-call billing. To
-limit exposure, smart-mode categorization sends **only merchant names**, not
-amounts or personal details.
+App-upload mode with the offline parser keeps everything on the machine. Harness mode
+sends statement text through Anthropic's cloud during reading/categorization — same
+exposure as the Anthropic API, but on the existing Claude Code session (no separate
+key or per-call billing). To limit exposure, categorization sends only merchant names.
 
 ## 4. Core concepts (data model)
 
 - **Expense** — one transaction:
-  `{ id, date, merchant, rawDescription, amount, category, status, split }`
+  `{ id, date, merchant, rawDescription, amount, source, category, status, split }`
+  - `source`: which statement/bank it came from (e.g. `"AppleCard 2026-01"`).
   - `status`: `"split"` | `"personal"`
-  - `split` (when status is split): `{ participants: [personIds...], includeSelf: bool, shares: "equal" | { personId: amount } }`
-  - `id` is derived from `date + rawDescription + amount` (stable across re-ingests, enables dedup).
+  - `split` (when split): `{ participants: [personIds...], includeSelf: bool, shares: "equal" | { personId: amount } }`
+  - `id` is derived from `source + date + rawDescription + amount` (stable across re-ingests; enables dedup).
 - **Person** — `{ id, name }`. The owner ("you") is implicit, not a Person record.
 - **Merchant rule** — keyed by normalized merchant name:
   `{ merchantName, handling: "personal" | "split" | null, category: string | null, defaultSplit?: {...} }`
-- **Settings** — `{ defaultPartnerId, defaultSplitWays, categories: [...] }`
+- **Settings** — `{ defaultPartnerId, defaultSplitWays, categories: [...], statementFolder }`
 
 ### Files on disk
 
 - `expenses.json` — current working set of expenses with their tags.
 - `rules.json` — remembered merchant handling + category mappings.
-- `people.json` — people + settings (or a combined `settings.json`).
+- `settings.json` — people, defaults, and the configured statement folder path.
 
-These are plain JSON; backing up = copying the files.
+Plain JSON; backup = copy the files.
 
 ## 5. Ingest flow
 
-1. User provides one or more Apple Card PDFs.
-2. Parser extracts transactions:
-   - Reads the **Transactions** section (date, description, daily cash %, daily cash $, amount).
-   - **Skips** the Payments section and negative/refund rows by default.
-   - Splits each description into a **merchant name** (leading text) and the rest (address/store #).
-3. For each expense, in priority order:
-   1. Matching **merchant rule** → apply its handling + category.
-   2. Otherwise → **default: Split 2 ways with the default partner**, plus a category
-      from the keyword dictionary (offline) or Claude (smart mode); unknown → Miscellaneous.
-4. **Dedup** by `id` so re-uploading the same statement doesn't double-count.
-5. Write `expenses.json`. In smart mode, Claude Code then starts the server and opens the app.
+### App-upload mode
+1. User picks one or more PDFs in the browser.
+2. Built-in parser (Apple Card) extracts transactions.
+3. Rules applied → defaults filled → dedup → written to `expenses.json`.
 
-## 6. Categorization
+### Harness mode
+1. User pastes the `LAUNCH.md` prompt; Claude Code reads the **configured statement folder**.
+2. For each statement file, regardless of bank:
+   - Extract every transaction: **date, merchant, amount** (+ raw description, source).
+   - Skip payments/refunds/credits by default (negative amounts), but surface them in the report.
+   - Normalize into the common **Expense** format.
+3. **Self-verify** (see §6) before anything is written.
+4. Apply saved rules → fill defaults → dedup → write `expenses.json`.
+5. Start the server and open the app, already grouped and reconciled.
+
+## 6. Accuracy & self-verification protocol (harness)
+
+Financial correctness is non-negotiable. The harness must, for every statement:
+
+1. **Two-pass read.** Extract transactions, then independently re-read the statement
+   and diff the two extractions. Any disagreement is investigated, never guessed.
+2. **Reconcile to the statement's own totals.** Sum the extracted transactions and
+   compare against the statement's stated control figures (e.g. Apple Card "Total
+   transactions for this period," balance math). If they don't match, stop and fix.
+3. **Integrity checks.** No missed rows, no duplicates (unless a genuine repeat
+   charge), every amount parses as a number, every date is valid, transaction count
+   matches the statement.
+4. **Verification report.** Emit a short report per statement: bank/source, count,
+   summed total vs statement total (must reconcile), and any row flagged as uncertain.
+   The user sees this before tagging.
+5. **Split-math integrity** (applies to both modes): each expense's shares sum back to
+   its amount; each person's grand total equals the sum of their shares across expenses.
+
+Only data that passes 1–4 is written to `expenses.json`.
+
+## 7. Categorization
 
 - **Default buckets:** Coffee, Grocery, Restaurants, Beauty, Shopping, Transport,
-  Subscriptions, Miscellaneous. The set can grow (Claude may add new ones; user may add their own).
-- **Offline brain:** a pre-loaded keyword → category dictionary (e.g. `STARBUCKS`→Coffee,
+  Subscriptions, Miscellaneous. The set can grow.
+- **Offline brain:** keyword → category dictionary (e.g. `STARBUCKS`→Coffee,
   `SAFEWAY`/`INDIA CASH & CARRY`→Grocery, `SEPHORA`→Beauty, `SHAHI DARBAR`→Restaurants,
   `UBER`→Transport, `SPOTIFY`/`UDEMY`→Subscriptions). Unknown → Miscellaneous.
-- **Learning:** when the user re-categorizes a merchant ("always" option), it's saved to
-  `rules.json` and applied on every future ingest. Miscellaneous shrinks over time.
-- **Smart brain:** Claude Code categorizes unknown merchants by reasoning, and may
-  introduce categories beyond the default set when warranted.
+- **Learning:** re-categorizing a merchant ("always") saves to `rules.json` and applies
+  on every future ingest. Miscellaneous shrinks over time.
+- **Smart brain:** Claude categorizes unknown merchants by reasoning; may add categories.
 
-## 7. Screens
+## 8. Screens
 
 ### Upload
-Drag-drop PDFs; shows count of transactions read and how many matched existing rules.
-(Offline mode uses this; smart mode pre-populates and skips straight to Review.)
+Drag-drop PDFs (app-upload mode); shows count read and how many matched existing rules.
+Harness mode pre-populates and opens straight to Review with the verification report shown.
 
 ### Review list
-Expenses **grouped by category**, Miscellaneous last. Each row shows date, merchant,
-amount, category, and current status. Per-row actions:
+Expenses **grouped by category**, Miscellaneous last. Each row: date, merchant, amount,
+source, category, status. Per-row actions:
 
 - **Personal (once)** / **Personal (always this merchant)**
-- **Split (once)** / **Split (always this merchant)** → opens split editor
+- **Split (once)** / **Split (always this merchant)** → split editor
 - **Change category (once / always)**
 
-The "Remove" affordance maps to **Personal (once)**.
+"Remove" maps to **Personal (once)**.
 
 ### Split editor
-- Pick which **people** share the expense (multi-select from contacts).
+- Pick which **people** share the expense (multi-select).
 - Equal by default, **you included**.
-- Override: custom amounts/percentages per person, or **exclude yourself**.
+- Override: custom amounts/percentages, or **exclude yourself**.
+
+### Submit → Totals
+After review, **Submit** locks in the tagging and shows a **totals summary**: how much
+**each person owes** (sum of their shares), with split-math integrity verified.
 
 ### People & Settings
-- Manage people (add/rename/remove).
-- Set **default partner** and **default split** (e.g. 2 ways with Nitin).
+- Manage people; set **default partner** + **default split**.
+- Set the **statement folder** path the harness scans.
 - View/edit merchant rules and category mappings.
 
-### Export
-- **Per-person CSV:** pick a person → every split expense they share, with date,
-  merchant, total, their share, category.
-- **Combined CSV:** all split expenses, a column per person's share.
+### Review & Publish
+- Review the export, then publish:
+  - **Per-person CSV:** date, merchant, total, their share, category.
+  - **Combined CSV:** all split expenses, a column per person's share.
 
-## 8. Split math
+## 9. Split math
 
 - Equal split divides the amount among all participants **including you** by default
   (split with Nitin = 2 ways; with Nitin + Priya = 3 ways).
-- Per-expense overrides: change the participant set, set custom shares, or exclude
-  yourself so others cover the full amount.
+- Per-expense overrides: change participants, set custom shares, or exclude yourself.
 - CSV shows each **other** person their share (not yours).
+- All split math is verified per §6 (step 5).
 
-## 9. Tech & architecture
+## 10. Tech & architecture
 
-- **Node** tiny local server:
-  - Serves the static frontend.
-  - REST-ish endpoints to read/write `expenses.json`, `rules.json`, settings.
-  - Hosts shared logic so it runs without Claude Code.
-- **Shared JS modules** (used by both server and browser, unit-tested):
-  - `parser` — Apple Card PDF → transactions (via `pdfjs-dist`).
+- **Node** tiny local server: serves the frontend; read/write `expenses.json`,
+  `rules.json`, `settings.json`; hosts shared logic so it runs without Claude Code.
+- **Shared JS modules** (server + browser, unit-tested):
+  - `parser` — Apple Card PDF → transactions (`pdfjs-dist`).
   - `categorizer` — keyword dictionary + rule application.
-  - `splitter` — split math and CSV generation.
-- **Frontend:** plain HTML/CSS/JS (no heavy framework needed for this scope).
-- **`LAUNCH.md`:** exact copy-paste prompt instructing a Claude Code session to
-  parse provided statements, apply `rules.json`, categorize the rest, write
-  `expenses.json`, start the server, and open the app.
+  - `splitter` — split math + CSV generation.
+  - `totals` — per-person totals from tagged expenses.
+- **Frontend:** plain HTML/CSS/JS.
+- **`LAUNCH.md`:** exact copy-paste prompt that tells a Claude Code session to scan the
+  statement folder, parse **any** bank's statements, run the **self-verification
+  protocol (§6)**, apply `rules.json`, write `expenses.json`, start the server, open the app.
 
 ### Module boundaries
 
@@ -161,23 +194,26 @@ The "Remove" affordance maps to **Personal (once)**.
 |---|---|---|
 | `parser` | PDF bytes → `[{date, description, amount, ...}]` | `pdfjs-dist` |
 | `categorizer` | transaction + rules → `{category, status, split}` | `rules.json` shape |
-| `splitter` | expenses → per-person/combined CSV strings | data model only |
-| `server` | persistence + serving | parser, categorizer, splitter |
-| `frontend` | UI for review/tag/export | server endpoints |
+| `splitter` | expenses → per-person/combined CSV strings | data model |
+| `totals` | expenses → per-person owed amounts | data model |
+| `server` | persistence + serving | parser, categorizer, splitter, totals |
+| `frontend` | UI for review/tag/submit/export | server endpoints |
 
-## 10. Testing
+## 11. Testing
 
-- Unit tests for `parser` against the **real January 2026 Apple Card statement**
-  as a fixture (correct transaction count, amounts, merchant extraction, Payments
-  section excluded).
-- Unit tests for `splitter` (equal, custom, exclude-self, per-person vs combined CSV).
-- Unit tests for `categorizer` (keyword hits, rule precedence, Miscellaneous fallback,
-  learning persistence).
+- `parser` against the **real January 2026 Apple Card statement** fixture (count,
+  amounts, merchant extraction, Payments excluded, **reconciles to statement total**).
+- `splitter` (equal, custom, exclude-self, per-person vs combined CSV).
+- `totals` (per-person sums; integrity check that shares reconcile to amounts).
+- `categorizer` (keyword hits, rule precedence, Miscellaneous fallback, learning).
 
-## 11. Out of scope (for now / YAGNI)
+## 12. Out of scope (for now / YAGNI)
 
-- Banks other than Apple Card (design keeps the parser swappable, but only Apple Card is built).
-- OCR for scanned/image PDFs.
+- **OCR for scanned/image statements.** Harness handles text-based PDFs only; image-only
+  statements are out until we add OCR.
+- Additional **offline** bank parsers beyond Apple Card (multi-bank is a harness capability;
+  offline parsing grows one bank at a time as needed).
 - Multi-user accounts, authentication, cloud sync.
-- Settling/payment tracking (who actually paid back) — the app produces the CSV; reconciliation is manual.
-- The optional "bring-your-own Anthropic API key" button (Claude Code covers the smart path; can be added later).
+- Payback/settlement tracking (who actually paid) — the app produces CSVs + totals; actual
+  reconciliation is manual.
+- A standalone "bring-your-own Anthropic API key" button (the harness covers smart mode).
