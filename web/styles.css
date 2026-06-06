@@ -1,0 +1,31 @@
+* { box-sizing: border-box; }
+body { font-family: -apple-system, system-ui, sans-serif; margin: 0; color: #1d1d1f; background: #f5f5f7; }
+header { background: #fff; padding: 12px 20px; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 5; }
+header h1 { margin: 0 0 8px; font-size: 20px; }
+nav button { margin-right: 8px; padding: 6px 12px; border: 1px solid #ccc; background: #fff; border-radius: 8px; cursor: pointer; }
+nav button.active { background: #0071e3; color: #fff; border-color: #0071e3; }
+main { padding: 20px; max-width: 920px; margin: 0 auto; }
+.view.hidden, .hidden { display: none; }
+.report { background: #e8f5e9; border: 1px solid #a5d6a7; padding: 10px 16px; margin: 12px 20px; border-radius: 8px; }
+.report.bad { background: #fdecea; border-color: #f5c6cb; }
+.group { background: #fff; border: 1px solid #e3e3e3; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+.group h3 { margin: 0; padding: 10px 16px; background: #fafafa; border-bottom: 1px solid #eee; }
+.row { display: grid; grid-template-columns: 90px 1fr 90px auto; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid #f0f0f0; }
+.row:last-child { border-bottom: none; }
+.row small { color: #888; }
+.row .amount { text-align: right; font-variant-numeric: tabular-nums; }
+.row.personal { opacity: 0.55; }
+.actions { text-align: right; }
+.actions button { font-size: 12px; margin-left: 4px; padding: 4px 8px; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+.actions button.on { background: #0071e3; color: #fff; border-color: #0071e3; }
+.filebtn { display: inline-block; padding: 8px 14px; background: #0071e3; color: #fff; border-radius: 8px; cursor: pointer; border: none; font-size: 14px; text-decoration: none; }
+.upload { margin-bottom: 16px; }
+.exports { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; }
+td, th { padding: 10px 16px; border-bottom: 1px solid #eee; text-align: left; }
+form { margin: 8px 0 16px; display: flex; gap: 8px; align-items: center; }
+input, select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; }
+button { cursor: pointer; }
+dialog { border: none; border-radius: 12px; padding: 20px; min-width: 320px; }
+dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; margin: 16px 0 0; }
+#splitPeople label { display: block; margin: 4px 0; }

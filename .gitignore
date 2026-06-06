@@ -1,6 +1,11 @@
-node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+# local data (never commit real financial data)
+data/
 expenses.json
 rules.json
-people.json
 settings.json
 *.pdf
+.DS_Store

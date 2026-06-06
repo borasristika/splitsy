@@ -1,0 +1,61 @@
+Payments
+Date
+Description
+Amount
+01/18/2026
+ACH Deposit Internet transfer from account ending in 7315
+-$1,419.72
+Total payments for this period
+-$1,419.72
+Transactions
+Date
+Description
+Daily Cash
+Amount
+12/31/2025
+SHEIN.COM 383 madison ave NEW YORK 10179 NY USA
+2%
+$0.66
+$33.13
+01/01/2026
+SQ *SHAHI DARBAR INDIA26953 Mission Blvd Ste F Hayward 94544 CA USA
+2%
+$0.90
+$45.05
+Jan 1
+—
+Jan 31, 2026
+Transactions
+Date
+Description
+Daily Cash
+Amount
+01/02/2026
+Spotify USA 45 W. 18th Street New York 10011 NY USA
+1%
+$0.12
+$11.99
+01/05/2026
+UBER *TRIP 706 MISSION ST 8005928996 94105 CA USA
+2%
+$0.31
+$15.63
+3% Daily Cash at Uber
+1%
+$0.16
+
+Total Daily Cash this month
+$2.15
+Total charges, credits and returns
+$105.80
+If you have an iPhone, you can check your Daily Cash balance in Wallet.
+Apple Card Monthly Installments
+12/26/2024
+Apple Store NASHUA NH TRANSACTION #2ce86
+2%
+$8.78
+$439.17
+This month's installment: $31.62
+Final installment: Dec 31, 2026
+Total financed
+$439.17
