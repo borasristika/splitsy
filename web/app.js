@@ -146,12 +146,46 @@ function renderTotals() {
   const box = document.getElementById('perPersonExports');
   box.innerHTML = '';
   for (const p of (state.settings.people || [])) {
+    const wrap = document.createElement('div');
+    wrap.className = 'person-export';
     const a = document.createElement('a');
     a.href = `/api/export/person.csv?id=${encodeURIComponent(p.id)}`;
     a.textContent = `Download ${p.name}'s CSV`;
     a.className = 'filebtn';
-    box.appendChild(a);
+    wrap.appendChild(a);
+
+    // Splitwise push (only if connected)
+    if (state.settings.splitwiseToken) {
+      const groups = state.settings.splitwiseGroups || [];
+      const sel = document.createElement('select');
+      sel.innerHTML = '<option value="0">No group (direct)</option>' +
+        groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      const push = document.createElement('button');
+      push.textContent = `Push ${p.name} to Splitwise`;
+      push.onclick = () => pushToSplitwise(p, sel.value);
+      wrap.appendChild(sel);
+      wrap.appendChild(push);
+    }
+    box.appendChild(wrap);
   }
+}
+
+async function pushToSplitwise(person, groupId) {
+  if (!person.splitwiseUserId) {
+    alert(`Map ${person.name} to a Splitwise friend in Settings first.`);
+    return;
+  }
+  const res = await (await fetch('/api/splitwise/push', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({personId: person.id, groupId: Number(groupId)})
+  })).json();
+  if (res.error) { alert('Push failed: ' + res.error); return; }
+  let msg = `Pushed ${res.pushed}, skipped ${res.skipped} already-sent.`;
+  if (res.errors && res.errors.length) {
+    msg += `\nErrors:\n` + res.errors.map(e => `${e.merchant}: ${e.error}`).join('\n');
+  }
+  alert(msg);
+  await refresh();
 }
 
 // ---------- settings ----------
@@ -166,7 +200,52 @@ function renderSettings() {
     (state.settings.people || []).map(p =>
       `<option value="${p.id}" ${state.settings.defaultPartnerId===p.id?'selected':''}>${p.name}</option>`).join('');
   document.getElementById('statementFolder').value = state.settings.statementFolder || '';
+  renderSplitwiseMapping();
 }
+
+function renderSplitwiseMapping() {
+  const status = document.getElementById('swStatus');
+  const box = document.getElementById('swMapping');
+  const friends = state.settings.splitwiseFriends || [];
+  if (!state.settings.splitwiseToken) {
+    status.textContent = 'Not connected.';
+    box.innerHTML = '';
+    return;
+  }
+  status.textContent = `Connected ✓ (${friends.length} friends, ${(state.settings.splitwiseGroups||[]).length} groups). Map each person:`;
+  box.innerHTML = '';
+  for (const p of (state.settings.people || [])) {
+    const row = document.createElement('div');
+    row.className = 'map-row';
+    const sel = document.createElement('select');
+    sel.innerHTML = '<option value="">(not mapped)</option>' +
+      friends.map(f => `<option value="${f.id}" ${p.splitwiseUserId===f.id?'selected':''}>${f.name}</option>`).join('');
+    sel.onchange = async () => {
+      p.splitwiseUserId = sel.value ? Number(sel.value) : null;
+      await api.saveSettings(state.settings); await refresh();
+    };
+    row.innerHTML = `<span>${p.name} →</span>`;
+    row.appendChild(sel);
+    box.appendChild(row);
+  }
+}
+
+document.getElementById('swConnectForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const token = document.getElementById('swToken').value.trim();
+  if (!token) return;
+  document.getElementById('swStatus').textContent = 'Connecting…';
+  const res = await (await fetch('/api/splitwise/connect', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({token})
+  })).json();
+  if (res.error) {
+    document.getElementById('swStatus').textContent = 'Connection failed: ' + res.error;
+    return;
+  }
+  document.getElementById('swToken').value = '';  // don't keep the secret in the field
+  await refresh();
+});
 
 async function removePerson(id) {
   state.settings.people = state.settings.people.filter(p => p.id !== id);

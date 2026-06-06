@@ -11,6 +11,11 @@ def default_settings() -> dict:
         "defaultSplitWays": 2,
         "categories": list(DEFAULT_CATEGORIES),
         "statementFolder": None,
+        # Splitwise integration (optional). Token is a personal API key stored locally.
+        "splitwiseToken": None,
+        "splitwiseUserId": None,   # your own Splitwise user id (filled on Connect)
+        "splitwiseGroups": [],     # cached [{id, name}] for the push dropdown
+        "splitwiseFriends": [],    # cached [{id, name}] for the person->friend mapping
     }
 
 

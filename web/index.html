@@ -52,6 +52,16 @@
       <h2>Statement folder (for Claude Code harness)</h2>
       <input id="statementFolder" placeholder="/Users/you/Statements" size="40">
       <div><button id="saveSettings">Save settings</button></div>
+
+      <h2>Splitwise (optional)</h2>
+      <p class="hint">Paste your Splitwise personal API key (from secure.splitwise.com/apps).
+        Stored locally only. Then map each person to a Splitwise friend.</p>
+      <form id="swConnectForm">
+        <input id="swToken" type="password" placeholder="Splitwise API key" size="40">
+        <button type="submit">Connect</button>
+      </form>
+      <span id="swStatus"></span>
+      <div id="swMapping"></div>
     </section>
   </main>
 

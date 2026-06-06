@@ -29,3 +29,7 @@ button { cursor: pointer; }
 dialog { border: none; border-radius: 12px; padding: 20px; min-width: 320px; }
 dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; margin: 16px 0 0; }
 #splitPeople label { display: block; margin: 4px 0; }
+.hint { color: #666; font-size: 13px; max-width: 560px; }
+.map-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.person-export { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#swMapping { margin-top: 10px; }

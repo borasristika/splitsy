@@ -8,6 +8,8 @@ from urllib.parse import urlparse, parse_qs
 from src.store import Store
 from src.reports import per_person_totals, per_person_csv, combined_csv
 from src.ingest import ingest_text
+from src.splitter import compute_shares
+from src import splitwise
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -89,7 +91,69 @@ def _make_handler(store: Store):
                 return self._send_json({"ok": True})
             if path == "/api/upload":
                 return self._handle_upload()
+            if path == "/api/splitwise/connect":
+                return self._handle_sw_connect()
+            if path == "/api/splitwise/push":
+                return self._handle_sw_push()
             return self._send_json({"error": "not found"}, 404)
+
+        def _handle_sw_connect(self):
+            token = (self._read_json().get("token") or "").strip()
+            if not token:
+                return self._send_json({"error": "missing token"}, 400)
+            try:
+                user = splitwise.get_current_user(token)
+                friends = splitwise.get_friends(token)
+                groups = splitwise.get_groups(token)
+            except splitwise.SplitwiseError as e:
+                return self._send_json({"error": str(e)}, 400)
+            settings = store.load_settings()
+            settings["splitwiseToken"] = token
+            settings["splitwiseUserId"] = user["id"]
+            settings["splitwiseGroups"] = [{"id": g["id"], "name": g["name"]} for g in groups]
+            settings["splitwiseFriends"] = [
+                {"id": f["id"],
+                 "name": (f"{f.get('first_name','')} {f.get('last_name','') or ''}".strip()
+                          or f.get("email") or str(f["id"]))}
+                for f in friends]
+            store.save_settings(settings)
+            return self._send_json({
+                "currentUser": {"id": user["id"],
+                                "name": f"{user.get('first_name','')} {user.get('last_name','') or ''}".strip()},
+                "friends": settings["splitwiseFriends"],
+                "groups": settings["splitwiseGroups"],
+            })
+
+        def _handle_sw_push(self):
+            data = self._read_json()
+            person_id = data.get("personId")
+            group_id = data.get("groupId") or 0
+            settings = store.load_settings()
+            token = settings.get("splitwiseToken")
+            my_id = settings.get("splitwiseUserId")
+            if not token or not my_id:
+                return self._send_json({"error": "Splitwise not connected"}, 400)
+            person_map = {p["id"]: p.get("splitwiseUserId") for p in settings["people"]}
+            expenses = store.load_expenses()
+            pushed, skipped, errors = [], [], []
+            for e in expenses:
+                if e.get("status") != "split":
+                    continue
+                if person_id not in compute_shares(e):
+                    continue
+                if e.get("splitwiseExpenseId"):
+                    skipped.append(e["id"])
+                    continue
+                try:
+                    payload = splitwise.build_expense_payload(e, my_id, person_map, group_id)
+                    sw_id = splitwise.create_expense(token, payload)
+                    e["splitwiseExpenseId"] = sw_id
+                    pushed.append(e["id"])
+                except splitwise.SplitwiseError as ex:
+                    errors.append({"id": e["id"], "merchant": e.get("merchant"), "error": str(ex)})
+            store.save_expenses(expenses)
+            return self._send_json({"pushed": len(pushed), "skipped": len(skipped),
+                                    "errors": errors})
 
         def _handle_upload(self):
             ctype = self.headers.get("Content-Type", "")
