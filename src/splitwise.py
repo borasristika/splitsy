@@ -20,7 +20,9 @@ class SplitwiseError(Exception):
 
 
 def _auth_headers(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
+    # Splitwise (behind a CDN) returns 403 / error 1010 for the default
+    # "Python-urllib" User-Agent, so we must send a normal one.
+    return {"Authorization": f"Bearer {token}", "User-Agent": "ExpenseSplitter/1.0"}
 
 
 def _get(token: str, path: str) -> dict:
