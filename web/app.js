@@ -36,7 +36,6 @@ let state = { expenses:[], rules:{}, settings:{people:[]}, totals:{}, you:0 };
 let lastReport = null;
 let bannerDismissed = false;
 let stmtFilter = localStorage.getItem('stmtFilter') || 'ALL';  // which statement is in view
-let liveTotals = { totals:{}, you:0 };  // server-computed (exact cents) for the Review live bar
 
 /* ---------- category + people metadata ---------- */
 const CAT_META = {
@@ -74,14 +73,10 @@ function splitSubtitle(e){
 }
 
 /* ---------- load + persist ---------- */
-async function refresh(){ Object.assign(state, await api.state()); await syncScopedTotals(); await refreshLiveTotals(); renderAll(); }
+async function refresh(){ Object.assign(state, await api.state()); await syncScopedTotals(); renderAll(); }
 async function persistExpenses(){
   const r=await api.saveExpenses(state.expenses); state.totals=r.totals; state.you=r.you;
-  await syncScopedTotals(); await refreshLiveTotals(); renderAll();
-}
-async function refreshLiveTotals(){
-  const r = await (await fetch('/api/totals?source='+encodeURIComponent(stmtFilter))).json();
-  liveTotals = { totals:r.totals||{}, you:r.you||0 };
+  await syncScopedTotals(); renderAll();
 }
 async function saveRule(matchKey, patch){
   const existing = state.rules[matchKey] || {matchKey, handling:null, category:null};
@@ -114,7 +109,7 @@ function renderBanner(){
 const escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 function statementSources(){ return [...new Set(state.expenses.map(e=>e.source))]; }
 function visibleExpenses(){ return stmtFilter==='ALL' ? state.expenses : state.expenses.filter(e=>e.source===stmtFilter); }
-async function setStmtFilter(src){ stmtFilter=src; localStorage.setItem('stmtFilter',src); await refreshLiveTotals(); renderReview(); renderLiveBar(); }
+function setStmtFilter(src){ stmtFilter=src; localStorage.setItem('stmtFilter',src); renderReview(); }
 
 function renderReview(){
   const host = $('#reviewList');
@@ -166,14 +161,14 @@ function renderLiveBar(){
   const host = $('#liveBar'); if(!host) return;
   if(!state.expenses.length){ host.innerHTML=''; return; }
   const people = state.settings.people||[];
+  // Always the grand totals across ALL statements, straight from the server (exact cents).
   const chips = [
-    `<span class="live-chip you"><span class="dot" style="background:var(--primary)"></span>You <span class="amt2 mono">${money(liveTotals.you)}</span></span>`
+    `<span class="live-chip you"><span class="dot" style="background:var(--primary)"></span>You pay <span class="amt2 mono">${money(state.you||0)}</span></span>`
   ].concat(people.map(p=>
-    `<span class="live-chip"><span class="dot" style="background:var(${personColor(p.id)})"></span>${p.name} owes <span class="amt2 mono">${money(liveTotals.totals[p.id]||0)}</span></span>`
+    `<span class="live-chip"><span class="dot" style="background:var(${personColor(p.id)})"></span>${p.name} owes <span class="amt2 mono">${money((state.totals||{})[p.id]||0)}</span></span>`
   ));
-  const scopeName = stmtFilter==='ALL' ? 'all statements' : stmtFilter;
   host.innerHTML = `<div class="livebar">
-    <div class="live-head">Running totals<span class="live-scope">${scopeName}</span></div>
+    <div class="live-head">Running totals<span class="live-scope">all statements</span></div>
     <div class="live-chips">${chips.join('')}</div>
     <button class="btn btn-primary" onclick="showScreen('totals')">See Totals &amp; export →</button>
   </div>`;
