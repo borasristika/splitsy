@@ -211,17 +211,31 @@ $('#reviewList').addEventListener('click', async ev=>{
   if(act==='personal'){
     e.status='personal'; await persistExpenses();
   } else if(act==='always-personal'){
-    e.status='personal'; await saveRule(e.matchKey,{handling:'personal'});
-    await persistExpenses(); toast(`Got it — "${e.merchant}" will always be yours 🔒`);
+    const n=applyHandlingToMerchant(e.matchKey,'personal');
+    await saveRule(e.matchKey,{handling:'personal'});
+    await persistExpenses(); toast(`"${e.merchant}" is now personal on all ${n} ${n!==1?'expenses':'expense'} 🔒`);
   } else if(act==='split'){
     openSplit(id);
   } else if(act==='always-split'){
-    e.status='split';
-    if(!e.split.participants.length && state.settings.defaultPartnerId) e.split.participants=[state.settings.defaultPartnerId];
+    const n=applyHandlingToMerchant(e.matchKey,'split');
     await saveRule(e.matchKey,{handling:'split'});
-    await persistExpenses(); toast(`Nice — "${e.merchant}" will always be split ✨`);
+    await persistExpenses(); toast(`"${e.merchant}" is now split on all ${n} ${n!==1?'expenses':'expense'} ✨`);
   }
 });
+
+// Apply a handling ('personal'/'split') to EVERY existing expense of this merchant.
+function applyHandlingToMerchant(matchKey, handling){
+  const dp = state.settings.defaultPartnerId;
+  let n=0;
+  state.expenses.forEach(e=>{
+    if(e.matchKey!==matchKey) return;
+    n++;
+    if(handling==='personal'){ e.status='personal'; }
+    else { e.status='split'; e.split.shares='equal'; e.split.includeSelf=true;
+           if(!e.split.participants.length && dp) e.split.participants=[dp]; }
+  });
+  return n;
+}
 
 async function assignDefaultToUnassigned(){
   const dp = state.settings.defaultPartnerId;
