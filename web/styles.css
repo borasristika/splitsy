@@ -148,6 +148,15 @@ button{font-family:var(--font);cursor:pointer;}
 .empty-note{background:var(--card);border:1px dashed var(--line-2);border-radius:var(--r-lg);
   padding:34px;text-align:center;color:var(--muted);}
 
+/* statement filter */
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:2px 0 4px;}
+.filters .flabel{font-size:13px;color:var(--muted);font-weight:700;margin-right:2px;}
+.fpill{font-size:13px;font-weight:600;color:var(--ink-2);border:1px solid var(--line-2);background:#fff;
+  border-radius:999px;padding:6px 13px;transition:.13s;}
+.fpill:hover{border-color:var(--primary);color:var(--primary-d);}
+.fpill.on{background:var(--primary);border-color:var(--primary);color:#fff;}
+.src-tag{font-size:11px;color:var(--faint);background:var(--canvas);border-radius:6px;padding:2px 8px;font-weight:600;white-space:nowrap;}
+
 /* ---------- 7. SPLIT MODAL ---------- */
 .overlay{position:fixed;inset:0;z-index:60;background:rgba(40,20,30,.42);
   display:grid;place-items:center;padding:24px;animation:fade .15s ease;}

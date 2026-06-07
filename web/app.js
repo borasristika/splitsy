@@ -35,6 +35,7 @@ const api = {
 let state = { expenses:[], rules:{}, settings:{people:[]}, totals:{} };
 let lastReport = null;
 let bannerDismissed = false;
+let stmtFilter = localStorage.getItem('stmtFilter') || 'ALL';  // which statement is in view
 
 /* ---------- category + people metadata ---------- */
 const CAT_META = {
@@ -102,17 +103,32 @@ function renderBanner(){
 }
 
 /* ---------- review ---------- */
+const escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+function statementSources(){ return [...new Set(state.expenses.map(e=>e.source))]; }
+function visibleExpenses(){ return stmtFilter==='ALL' ? state.expenses : state.expenses.filter(e=>e.source===stmtFilter); }
+function setStmtFilter(src){ stmtFilter=src; localStorage.setItem('stmtFilter',src); renderReview(); }
+
 function renderReview(){
   const host = $('#reviewList');
   if(!state.expenses.length){
     host.innerHTML = `<div class="empty-note">No expenses yet. Upload a statement PDF above, or run the Claude Code companion (LAUNCH.md).</div>`;
     return;
   }
-  const cats = [...new Set(state.expenses.map(e=>e.category))]
+  const srcs = statementSources();
+  if(stmtFilter!=='ALL' && !srcs.includes(stmtFilter)) stmtFilter='ALL';
+  let bar = '';
+  if(srcs.length){
+    bar = `<div class="filters"><span class="flabel">Statement:</span>
+      <button class="fpill ${stmtFilter==='ALL'?'on':''}" data-src="ALL">All (${state.expenses.length})</button>
+      ${srcs.map(s=>`<button class="fpill ${stmtFilter===s?'on':''}" data-src="${escAttr(s)}">${s} (${state.expenses.filter(e=>e.source===s).length})</button>`).join('')}
+    </div>`;
+  }
+  const list = visibleExpenses();
+  const cats = [...new Set(list.map(e=>e.category))]
     .sort((a,b)=> catRank(a)-catRank(b) || a.localeCompare(b));
-  let html='';
+  let html = bar;
   for(const cat of cats){
-    const rows = state.expenses.filter(e=>e.category===cat);
+    const rows = list.filter(e=>e.category===cat);
     const meta = catMeta(cat);
     const subtotal = rows.reduce((s,e)=>s+e.amount,0);
     html += `<section class="group">
@@ -137,6 +153,7 @@ function rowHTML(e){
       <span class="date mono">${fmtDate(e.date)}</span>
       <span class="merch" title="${(e.rawDescription||e.merchant||'').replace(/"/g,'&quot;')}">${e.merchant||''}</span>
       <span class="chip" style="background:var(--${meta.key}-t);color:var(--${meta.key})"><i style="background:var(--${meta.key})"></i>${e.category}</span>
+      ${stmtFilter==='ALL' ? `<span class="src-tag">${e.source}</span>` : ''}
     </div>
     <span class="amt">${money(e.amount)}</span>
     <div class="r-foot">
@@ -152,6 +169,8 @@ function rowHTML(e){
 }
 
 $('#reviewList').addEventListener('click', async ev=>{
+  const fp = ev.target.closest('.fpill');
+  if(fp){ setStmtFilter(fp.dataset.src); return; }
   const btn = ev.target.closest('.act'); if(!btn) return;
   const id = ev.target.closest('.row').dataset.id;
   const e = state.expenses.find(x=>x.id===id); if(!e) return;
