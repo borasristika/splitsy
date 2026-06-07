@@ -59,6 +59,29 @@ const netShareOf = (list, totals) => {
   const owedC = Object.values(totals||{}).reduce((c,v)=>c+Math.round((v||0)*100),0);
   return (spentC - owedC)/100;
 };
+// Client-side mirror of the server's compute_shares (integer cents, remainder to
+// earliest shares, owner takes the first share). Lets the running bar reflect any
+// statement filter without a server round-trip, and stay exact.
+function computeSharesJS(e){
+  if(e.status!=='split') return {};
+  const split = e.split||{}; const participants = split.participants||[];
+  const amountC = Math.round((e.amount||0)*100);
+  if(split.shares && split.shares!=='equal'){
+    const out={}; for(const pid in split.shares) out[pid]=Math.round(split.shares[pid]*100)/100; return out;
+  }
+  const n = participants.length + (split.includeSelf?1:0);
+  if(n===0) return {};
+  const base = Math.floor(amountC/n), rem = amountC - base*n;
+  const parts = Array.from({length:n}, (_,i)=> base + (i<rem?1:0));
+  const offset = split.includeSelf?1:0;
+  const res={}; participants.forEach((pid,i)=>{ res[pid]=parts[offset+i]/100; });
+  return res;
+}
+function perPersonTotalsJS(list){
+  const cents={};
+  for(const e of list){ const sh=computeSharesJS(e); for(const pid in sh) cents[pid]=(cents[pid]||0)+Math.round(sh[pid]*100); }
+  const out={}; for(const pid in cents) out[pid]=cents[pid]/100; return out;
+}
 const personById = id => (state.settings.people||[]).find(p=>p.id===id);
 const initial = name => (name||'?').trim().charAt(0).toUpperCase() || '?';
 function catMeta(name){ return CAT_META[name] || {key:'misc', emoji:'🧩'}; }
@@ -118,7 +141,7 @@ function renderBanner(){
 const escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 function statementSources(){ return [...new Set(state.expenses.map(e=>e.source))]; }
 function visibleExpenses(){ return stmtFilter==='ALL' ? state.expenses : state.expenses.filter(e=>e.source===stmtFilter); }
-function setStmtFilter(src){ stmtFilter=src; localStorage.setItem('stmtFilter',src); renderReview(); }
+function setStmtFilter(src){ stmtFilter=src; localStorage.setItem('stmtFilter',src); renderReview(); renderLiveBar(); }
 
 function renderReview(){
   const host = $('#reviewList');
@@ -170,15 +193,18 @@ function renderLiveBar(){
   const host = $('#liveBar'); if(!host) return;
   if(!state.expenses.length){ host.innerHTML=''; return; }
   const people = state.settings.people||[];
-  // Always the grand totals across ALL statements, straight from the server (exact cents).
+  // Reflect whatever statement is selected in Review (computed client-side, exact cents).
+  const vis = visibleExpenses();
+  const owed = perPersonTotalsJS(vis);
+  const scopeName = stmtFilter==='ALL' ? 'all statements' : stmtFilter;
   const chips = [
-    `<span class="live-chip spent"><span class="dot" style="background:var(--ink)"></span>Total spent <span class="amt2 mono">${money(spentOf(state.expenses))}</span></span>`,
-    `<span class="live-chip you"><span class="dot" style="background:var(--primary)"></span>You actually pay <span class="amt2 mono">${money(netShareOf(state.expenses, state.totals))}</span></span>`
-  ].concat(people.map(p=>
-    `<span class="live-chip"><span class="dot" style="background:var(${personColor(p.id)})"></span>${p.name} owes <span class="amt2 mono">${money((state.totals||{})[p.id]||0)}</span></span>`
+    `<span class="live-chip spent"><span class="dot" style="background:var(--ink)"></span>Total spent <span class="amt2 mono">${money(spentOf(vis))}</span></span>`,
+    `<span class="live-chip you"><span class="dot" style="background:var(--primary)"></span>You actually pay <span class="amt2 mono">${money(netShareOf(vis, owed))}</span></span>`
+  ].concat(people.filter(p=>(owed[p.id]||0)>0).map(p=>
+    `<span class="live-chip"><span class="dot" style="background:var(${personColor(p.id)})"></span>${p.name} owes <span class="amt2 mono">${money(owed[p.id]||0)}</span></span>`
   ));
   host.innerHTML = `<div class="livebar">
-    <div class="live-head">Running totals<span class="live-scope">all statements</span></div>
+    <div class="live-head">Running totals<span class="live-scope">${scopeName}</span></div>
     <div class="live-chips">${chips.join('')}</div>
     <button class="btn btn-primary" onclick="showScreen('totals')">See Totals &amp; export →</button>
   </div>`;
