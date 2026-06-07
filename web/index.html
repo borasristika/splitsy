@@ -1,82 +1,104 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Expense Splitter</title>
-  <link rel="stylesheet" href="/styles.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Splitsy — Expense Splitter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <h1>Expense Splitter</h1>
-    <nav>
-      <button data-view="review" class="active">Review</button>
-      <button data-view="totals">Totals</button>
-      <button data-view="settings">People &amp; Settings</button>
+
+<!-- ===== APP BAR ===== -->
+<header class="appbar">
+  <div class="wrap appbar-in">
+    <div class="wordmark"><span class="logo">💸</span>Splitsy</div>
+    <nav class="tabs">
+      <button class="tab on" data-screen="review">Review</button>
+      <button class="tab" data-screen="totals">Totals</button>
+      <button class="tab" data-screen="settings">People &amp; Settings</button>
     </nav>
-  </header>
+    <div class="appbar-right">
+      <div class="me-pill"><span class="avatar" style="background:var(--primary)">Y</span>You</div>
+    </div>
+  </div>
+</header>
 
-  <section id="report" class="report hidden"></section>
+<!-- ===== REVIEW ===== -->
+<main class="screen wrap" id="screen-review">
+  <div id="bannerSlot"></div>
 
-  <main>
-    <section id="view-review" class="view">
-      <div class="upload">
-        <label class="filebtn">Upload statement PDF
-          <input type="file" id="pdfInput" accept="application/pdf" hidden>
-        </label>
-        <span id="uploadStatus"></span>
+  <div class="upload" id="uploadZone" style="margin-top:16px">
+    <span class="ic">📄</span>
+    <div>
+      <div class="ut">Drop a statement PDF here to add expenses</div>
+      <div class="us">…or let the Claude Code companion drop them into your statement folder automatically.</div>
+    </div>
+    <input type="file" id="pdfInput" accept="application/pdf" hidden />
+    <button class="btn btn-primary" id="uploadBtn">Upload statement</button>
+  </div>
+
+  <div class="stack" id="reviewList"></div>
+</main>
+
+<!-- ===== TOTALS ===== -->
+<main class="screen wrap hidden" id="screen-totals">
+  <div class="section-head">
+    <h1>Here's who owes you 💸</h1>
+    <span class="sub">Based on everything you split.</span>
+  </div>
+  <div class="celebrate" id="celebrate"></div>
+  <div class="totals-grid" id="totalsList"></div>
+  <div class="combined-bar">
+    <button class="btn btn-ghost" id="combinedBtn">⬇︎ Download combined CSV</button>
+  </div>
+</main>
+
+<!-- ===== PEOPLE & SETTINGS ===== -->
+<main class="screen wrap hidden" id="screen-settings">
+  <div class="section-head"><h1>People &amp; Settings</h1></div>
+  <div class="settings-grid">
+
+    <div class="panel">
+      <h3>People</h3>
+      <p class="desc">Everyone you split expenses with.</p>
+      <div id="peopleList"></div>
+      <div class="add-form">
+        <input class="input" id="newPerson" placeholder="Add a person…" onkeydown="if(event.key==='Enter')addPerson()" />
+        <button class="btn btn-primary" onclick="addPerson()">Add</button>
       </div>
-      <div id="groups"></div>
-    </section>
+    </div>
 
-    <section id="view-totals" class="view hidden">
-      <h2>Each person owes you</h2>
-      <table id="totalsTable"></table>
-      <div class="exports">
-        <button id="exportCombined" class="filebtn">Download combined CSV</button>
-        <div id="perPersonExports"></div>
+    <div class="panel">
+      <h3>Defaults</h3>
+      <p class="desc">How brand-new expenses behave before you touch them.</p>
+      <div class="field">
+        <label for="defPartner">Default partner</label>
+        <select class="select block" id="defPartner" onchange="setDefaultPartner(this.value)"></select>
+        <div class="help">New expenses default to splitting <b>2 ways</b> with this person.</div>
       </div>
-    </section>
+      <div class="field">
+        <label for="folder">Statement folder</label>
+        <input class="input" id="folder" placeholder="~/Documents/Statements" onchange="saveFolder(this.value)" />
+        <div class="help">Where the Claude Code companion looks for new statement files.</div>
+      </div>
+    </div>
 
-    <section id="view-settings" class="view hidden">
-      <h2>People</h2>
-      <ul id="peopleList"></ul>
-      <form id="addPersonForm">
-        <input id="personName" placeholder="Name (e.g. Nitin)" required>
-        <button type="submit">Add person</button>
-      </form>
-      <h2>Defaults</h2>
-      <label>Default partner:
-        <select id="defaultPartner"></select>
-      </label>
-      <h2>Statement folder (for Claude Code harness)</h2>
-      <input id="statementFolder" placeholder="/Users/you/Statements" size="40">
-      <div><button id="saveSettings">Save settings</button></div>
+    <div class="panel full">
+      <h3>Splitwise <span style="font-weight:500;color:var(--muted);font-size:13px;">(optional)</span></h3>
+      <p class="desc">Connect to push splits straight to Splitwise. Your API key stays on this device.</p>
+      <div id="swArea"></div>
+    </div>
 
-      <h2>Splitwise (optional)</h2>
-      <p class="hint">Paste your Splitwise personal API key (from secure.splitwise.com/apps).
-        Stored locally only. Then map each person to a Splitwise friend.</p>
-      <form id="swConnectForm">
-        <input id="swToken" type="password" placeholder="Splitwise API key" size="40">
-        <button type="submit">Connect</button>
-      </form>
-      <span id="swStatus"></span>
-      <div id="swMapping"></div>
-    </section>
-  </main>
+  </div>
+</main>
 
-  <dialog id="splitDialog">
-    <form method="dialog" id="splitForm">
-      <h3 id="splitTitle">Split</h3>
-      <div id="splitPeople"></div>
-      <label><input type="checkbox" id="includeSelf" checked> Include me</label>
-      <menu>
-        <button value="cancel">Cancel</button>
-        <button id="splitSave" value="save">Save</button>
-      </menu>
-    </form>
-  </dialog>
+<!-- ===== MODAL + TOAST MOUNT ===== -->
+<div id="modalMount"></div>
+<div class="toast-wrap" id="toastWrap"></div>
 
-  <script type="module" src="/app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>
