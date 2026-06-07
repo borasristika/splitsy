@@ -228,10 +228,13 @@ button{font-family:var(--font);cursor:pointer;}
 .live-chip .amt2{color:var(--ink);}
 .live-chip.spent{background:var(--ink);border-color:var(--ink);color:#fff;}
 .live-chip.spent .amt2{color:#fff;}
+.live-chip.you{background:var(--primary-t);border-color:var(--primary-t2);color:var(--primary-d);}
+.live-chip.you .amt2{color:var(--primary-d);}
 .livebar .btn{margin-left:auto;}
 
-/* "You" card on Totals */
-.you-card{background:linear-gradient(120deg,var(--primary-t),#fff);}
+/* summary cards on Totals */
+.you-card{background:linear-gradient(120deg,#f3eef1,#fff);}
+.share-card{background:linear-gradient(120deg,var(--primary-t),#fff);}
 
 /* History */
 .hist-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
