@@ -50,6 +50,9 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 const $ = s => document.querySelector(s);
 const money = n => '$' + Number(n||0).toFixed(2);
+// Sum charges in integer cents (exact to 2 decimals) — works even if the server
+// is an older process that doesn't send a 'spent' field.
+const spentOf = list => list.reduce((c,e)=>c+Math.round((e.amount||0)*100),0)/100;
 const personById = id => (state.settings.people||[]).find(p=>p.id===id);
 const initial = name => (name||'?').trim().charAt(0).toUpperCase() || '?';
 function catMeta(name){ return CAT_META[name] || {key:'misc', emoji:'🧩'}; }
@@ -163,7 +166,7 @@ function renderLiveBar(){
   const people = state.settings.people||[];
   // Always the grand totals across ALL statements, straight from the server (exact cents).
   const chips = [
-    `<span class="live-chip spent"><span class="dot" style="background:var(--ink)"></span>Total spent <span class="amt2 mono">${money(state.spent||0)}</span></span>`
+    `<span class="live-chip spent"><span class="dot" style="background:var(--ink)"></span>Total spent <span class="amt2 mono">${money(spentOf(state.expenses))}</span></span>`
   ].concat(people.map(p=>
     `<span class="live-chip"><span class="dot" style="background:var(${personColor(p.id)})"></span>${p.name} owes <span class="amt2 mono">${money((state.totals||{})[p.id]||0)}</span></span>`
   ));
@@ -331,7 +334,7 @@ function renderTotals(){
   const people = state.settings.people||[];
   const groups = [{id:0,name:'No group (direct)'}].concat(state.settings.splitwiseGroups||[]);
   const sq = srcQuery();
-  const spentVal = (totalsScope==='ALL') ? (state.spent||0) : (scopedSpent||0);
+  const spentVal = spentOf(scopeExp);
   const scopeWord = totalsScope==='ALL' ? 'all statements' : totalsScope;
   const spentCard = `<div class="owe-card you-card">
       <span class="avatar" style="background:var(--ink)">$</span>
