@@ -135,6 +135,16 @@ function renderReview(){
   const cats = [...new Set(list.map(e=>e.category))]
     .sort((a,b)=> catRank(a)-catRank(b) || a.localeCompare(b));
   let html = bar;
+
+  const unassigned = list.filter(e=>e.status==='split' && !e.split.participants.length);
+  if(unassigned.length){
+    const dp = state.settings.defaultPartnerId ? personById(state.settings.defaultPartnerId) : null;
+    html += `<div class="assign-note">
+      <span>🤝 <b>${unassigned.length}</b> split ${unassigned.length!==1?'expenses have':'expense has'} nobody selected${dp?`, so ${dp.name} isn't being charged for ${unassigned.length!==1?'them':'it'}.`:'.'}</span>
+      ${dp ? `<button class="btn btn-primary" onclick="assignDefaultToUnassigned()">Add ${dp.name} to ${unassigned.length}</button>`
+           : `<button class="btn btn-ghost" onclick="showScreen('settings')">Set a default partner first</button>`}
+    </div>`;
+  }
   for(const cat of cats){
     const rows = list.filter(e=>e.category===cat);
     const meta = catMeta(cat);
@@ -214,6 +224,15 @@ $('#reviewList').addEventListener('click', async ev=>{
     await persistExpenses(); toast(`Nice — "${e.merchant}" will always be split ✨`);
   }
 });
+
+async function assignDefaultToUnassigned(){
+  const dp = state.settings.defaultPartnerId;
+  if(!dp){ toast('Set a default partner in Settings first'); showScreen('settings'); return; }
+  const list = visibleExpenses().filter(e=>e.status==='split' && !e.split.participants.length);
+  list.forEach(e=>{ e.split.participants=[dp]; e.split.includeSelf=true; e.split.shares='equal'; });
+  await persistExpenses();
+  toast(`Added ${(personById(dp)||{}).name} to ${list.length} expense${list.length!==1?'s':''} ✨`,'good');
+}
 
 /* ---------- split modal ---------- */
 let modalDraft = null;

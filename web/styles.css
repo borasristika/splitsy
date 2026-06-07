@@ -232,6 +232,12 @@ button{font-family:var(--font);cursor:pointer;}
 
 /* "You" card on Totals */
 .you-card{background:linear-gradient(120deg,var(--primary-t),#fff);}
+
+/* "assign default partner" nudge on Review */
+.assign-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--warn-t);
+  border:1px solid #f0d28a;border-radius:var(--r-md);padding:12px 18px;color:var(--warn-d);font-size:14px;}
+.assign-note b{color:var(--ink);}
+.assign-note .btn{margin-left:auto;}
 .celebrate{display:flex;align-items:center;gap:14px;background:linear-gradient(120deg,var(--primary-t),#fff);
   border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 22px;margin-top:8px;}
 .celebrate .em{font-size:30px;}
