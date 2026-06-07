@@ -41,29 +41,66 @@ def _fmt(amount: float) -> str:
     return f"{amount:.2f}"
 
 
-def per_person_csv(expenses: list, person_id: str, people: list) -> str:
+def _person_name(people: list, pid: str) -> str:
+    for p in people:
+        if p["id"] == pid:
+            return p["name"]
+    return str(pid)
+
+
+def statements_included(expenses: list) -> list:
+    """Distinct statement sources present, sorted — what the export covers."""
+    return sorted({e.get("source", "") for e in expenses if e.get("source")})
+
+
+def per_person_csv(expenses: list, person_id: str, people: list, generated_on=None) -> str:
+    name = _person_name(people, person_id)
     out = io.StringIO()
     w = csvlib.writer(out)
-    w.writerow(["Date", "Merchant", "Category", "Total", "Your Share"])
+    rows, total_cents = [], 0
     for e in expenses:
         shares = compute_shares(e)
         if person_id in shares:
-            w.writerow([e["date"], e["merchant"], e["category"],
-                        _fmt(e["amount"]), _fmt(shares[person_id])])
+            rows.append([e["date"], e["merchant"], e["category"], e.get("source", ""),
+                         _fmt(e["amount"]), _fmt(shares[person_id])])
+            total_cents += to_cents(shares[person_id])
+    stmts = statements_included(expenses)
+    w.writerow([f"Expense split summary for {name}"])
+    w.writerow(["Statements included", "; ".join(stmts) or "(none)"])
+    if generated_on:
+        w.writerow(["Generated", generated_on])
+    w.writerow([])
+    w.writerow(["Date", "Merchant", "Category", "Statement", "Total", f"{name}'s share"])
+    for r in rows:
+        w.writerow(r)
+    w.writerow([])
+    w.writerow(["TOTAL", "", "", "", "", _fmt(to_dollars(total_cents))])
     return out.getvalue()
 
 
-def combined_csv(expenses: list, people: list) -> str:
+def combined_csv(expenses: list, people: list, generated_on=None) -> str:
     out = io.StringIO()
     w = csvlib.writer(out)
     names = [p["name"] for p in people]
     ids = [p["id"] for p in people]
-    w.writerow(["Date", "Merchant", "Category", "Total"] + names)
+    totals = {pid: 0 for pid in ids}
+    stmts = statements_included(expenses)
+    w.writerow(["Combined expense split summary"])
+    w.writerow(["Statements included", "; ".join(stmts) or "(none)"])
+    if generated_on:
+        w.writerow(["Generated", generated_on])
+    w.writerow([])
+    w.writerow(["Date", "Merchant", "Category", "Statement", "Total"] + names)
     for e in expenses:
         shares = compute_shares(e)
         if not shares:
             continue
-        row = [e["date"], e["merchant"], e["category"], _fmt(e["amount"])]
-        row += [_fmt(shares.get(pid, 0.0)) for pid in ids]
+        row = [e["date"], e["merchant"], e["category"], e.get("source", ""), _fmt(e["amount"])]
+        for pid in ids:
+            amt = shares.get(pid, 0.0)
+            totals[pid] += to_cents(amt)
+            row.append(_fmt(amt))
         w.writerow(row)
+    w.writerow([])
+    w.writerow(["TOTAL", "", "", "", ""] + [_fmt(to_dollars(totals[pid])) for pid in ids])
     return out.getvalue()

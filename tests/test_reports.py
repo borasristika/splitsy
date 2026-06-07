@@ -50,18 +50,25 @@ class TestReports(unittest.TestCase):
         self.assertEqual(you + others, 1000)
         self.assertEqual(owner_total(exps), 3.34)
 
-    def test_per_person_csv_only_their_expenses(self):
-        csv = per_person_csv(EXPENSES, "p2", PEOPLE)
-        lines = csv.strip().splitlines()
-        self.assertEqual(lines[0], "Date,Merchant,Category,Total,Your Share")
-        self.assertEqual(len(lines), 2)  # header + 1 expense for p2
-        self.assertIn("SAFEWAY", lines[1])
-        self.assertTrue(lines[1].endswith("10.0") or lines[1].endswith("10.00"))
+    def test_per_person_csv_has_summary_statement_and_total(self):
+        csv = per_person_csv(EXPENSES, "p2", PEOPLE, generated_on="2026-06-07")
+        lines = csv.splitlines()
+        self.assertTrue(any("Expense split summary for Priya" in l for l in lines))
+        self.assertTrue(any(l.startswith("Statements included") and "AppleCard 2026-01" in l for l in lines))
+        header = [l for l in lines if l.startswith("Date,Merchant,Category,Statement,Total")][0]
+        self.assertIn("Priya's share", header)
+        safeway = [l for l in lines if "SAFEWAY" in l][0]
+        self.assertIn("AppleCard 2026-01", safeway)  # per-row statement
+        total = [l for l in lines if l.startswith("TOTAL")][0]
+        self.assertTrue(total.strip().endswith("10.00"))  # Priya owes 10.00
 
-    def test_combined_csv_has_column_per_person(self):
-        csv = combined_csv(EXPENSES, PEOPLE)
-        header = csv.strip().splitlines()[0]
-        self.assertEqual(header, "Date,Merchant,Category,Total,Nitin,Priya")
+    def test_combined_csv_has_statement_column_and_totals(self):
+        csv = combined_csv(EXPENSES, PEOPLE, generated_on="2026-06-07")
+        lines = csv.splitlines()
+        header = [l for l in lines if l.startswith("Date,Merchant,Category,Statement,Total")][0]
+        self.assertTrue(header.endswith("Nitin,Priya"))
+        total = [l for l in lines if l.startswith("TOTAL")][0]
+        self.assertTrue(total.strip().endswith("25.00,10.00"))  # Nitin 25.00, Priya 10.00
 
 
 if __name__ == "__main__":

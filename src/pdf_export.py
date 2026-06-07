@@ -27,19 +27,24 @@ def _row(pdf, cells, h=7, fill=False, border=1):
                  new_y="NEXT" if last else "TOP")
 
 
-def _header(pdf, title, scope_label, generated_on):
+def _statements(expenses):
+    return sorted({e.get("source", "") for e in expenses if e.get("source")})
+
+
+def _header(pdf, title, generated_on, statements):
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(*PINK)
     pdf.cell(0, 10, _s(title), new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*GREY)
-    pdf.cell(0, 6, _s(f"{scope_label}  -  generated {generated_on}"),
-             new_x="LMARGIN", new_y="NEXT")
+    stmt = "; ".join(statements) if statements else "(none)"
+    pdf.multi_cell(0, 5, _s("Statements included: " + stmt))
+    pdf.cell(0, 6, _s("Generated " + generated_on), new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
-    pdf.ln(4)
+    pdf.ln(3)
 
 
-def per_person_pdf(expenses, person_id, people, scope_label, generated_on) -> bytes:
+def per_person_pdf(expenses, person_id, people, generated_on) -> bytes:
     person = next((p for p in people if p["id"] == person_id), None)
     name = person["name"] if person else str(person_id)
 
@@ -53,7 +58,7 @@ def per_person_pdf(expenses, person_id, people, scope_label, generated_on) -> by
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(True, margin=15)
     pdf.add_page()
-    _header(pdf, f"Expenses to split with {name}", scope_label, generated_on)
+    _header(pdf, f"Expenses to split with {name}", generated_on, _statements(expenses))
 
     cols = [("Date", 24, "L"), ("Merchant", 72, "L"), ("Category", 34, "L"),
             ("Total", 28, "R"), (f"{name} owes", 28, "R")]
@@ -77,11 +82,11 @@ def per_person_pdf(expenses, person_id, people, scope_label, generated_on) -> by
     return bytes(pdf.output())
 
 
-def combined_pdf(expenses, people, scope_label, generated_on) -> bytes:
+def combined_pdf(expenses, people, generated_on) -> bytes:
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(True, margin=15)
     pdf.add_page()
-    _header(pdf, "Split expenses - combined", scope_label, generated_on)
+    _header(pdf, "Split expenses - combined", generated_on, _statements(expenses))
 
     n = max(1, len(people))
     person_w = 26

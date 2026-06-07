@@ -88,24 +88,24 @@ def _make_handler(store: Store):
             if path == "/api/export/combined.csv":
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
-                return self._send_text(combined_csv(expenses, people),
+                return self._send_text(combined_csv(expenses, people, self._today()),
                                         "text/csv", filename="combined.csv")
             if path == "/api/export/person.csv":
                 pid = q.get("id", [None])[0]
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
-                return self._send_text(per_person_csv(expenses, pid, people),
+                return self._send_text(per_person_csv(expenses, pid, people, self._today()),
                                         "text/csv", filename=f"{self._person_name(pid)}.csv")
             if path == "/api/export/combined.pdf":
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
-                pdf = combined_pdf(expenses, people, _scope_label(source), self._today())
+                pdf = combined_pdf(expenses, people, self._today())
                 return self._send_bytes(pdf, "application/pdf", filename="split-expenses-combined.pdf")
             if path == "/api/export/person.pdf":
                 pid = q.get("id", [None])[0]
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
-                pdf = per_person_pdf(expenses, pid, people, _scope_label(source), self._today())
+                pdf = per_person_pdf(expenses, pid, people, self._today())
                 return self._send_bytes(pdf, "application/pdf",
                                         filename=f"{self._person_name(pid)}-split-expenses.pdf")
             return self._serve_static(path)

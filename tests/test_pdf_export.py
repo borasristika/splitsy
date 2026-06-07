@@ -20,22 +20,22 @@ EXPENSES = [
 
 class TestPdfExport(unittest.TestCase):
     def test_per_person_pdf_is_valid_pdf(self):
-        data = per_person_pdf(EXPENSES, "p2", PEOPLE, "AppleCard 2026-01", "2026-06-07")
+        data = per_person_pdf(EXPENSES, "p2", PEOPLE, "2026-06-07")
         self.assertTrue(data.startswith(b"%PDF"))
         self.assertGreater(len(data), 500)
 
     def test_combined_pdf_is_valid_pdf(self):
-        data = combined_pdf(EXPENSES, PEOPLE, "All statements", "2026-06-07")
+        data = combined_pdf(EXPENSES, PEOPLE, "2026-06-07")
         self.assertTrue(data.startswith(b"%PDF"))
         self.assertGreater(len(data), 500)
 
     def test_per_person_pdf_handles_no_rows(self):
-        data = per_person_pdf([EXPENSES[2]], "p1", PEOPLE, "x", "2026-06-07")
+        data = per_person_pdf([EXPENSES[2]], "p1", PEOPLE, "2026-06-07")
         self.assertTrue(data.startswith(b"%PDF"))
 
     def test_non_latin_merchant_does_not_crash(self):
         e = [exp("d", "CAFÉ MÜNCHEN ☕", 12.00, ["p1"])]
-        data = per_person_pdf(e, "p1", PEOPLE, "x", "2026-06-07")
+        data = per_person_pdf(e, "p1", PEOPLE, "2026-06-07")
         self.assertTrue(data.startswith(b"%PDF"))
 
 
