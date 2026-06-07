@@ -12,6 +12,7 @@ from src.pdf_export import per_person_pdf, combined_pdf
 from src.ingest import ingest_text
 from src.splitter import compute_shares
 from src import splitwise
+from src import history
 
 
 def _filter_by_source(expenses, source):
@@ -85,23 +86,34 @@ def _make_handler(store: Store):
                 return self._send_json({"totals": per_person_totals(expenses),
                                         "you": owner_total(expenses),
                                         "spent": total_spent(expenses)})
+            if path == "/api/history":
+                return self._send_json({"history": list(reversed(history.load_index(store.data_dir)))})
+            if path == "/api/history/file":
+                snap = history.read_snapshot(store.data_dir, q.get("id", [None])[0])
+                if snap is None:
+                    return self._send_json({"error": "not found"}, 404)
+                return self._send_text(snap, "text/html")
             if path == "/api/export/combined.csv":
+                self._snapshot()
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
                 return self._send_text(combined_csv(expenses, people, self._today()),
                                         "text/csv", filename="combined.csv")
             if path == "/api/export/person.csv":
+                self._snapshot()
                 pid = q.get("id", [None])[0]
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
                 return self._send_text(per_person_csv(expenses, pid, people, self._today()),
                                         "text/csv", filename=f"{self._person_name(pid)}.csv")
             if path == "/api/export/combined.pdf":
+                self._snapshot()
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
                 pdf = combined_pdf(expenses, people, self._today())
                 return self._send_bytes(pdf, "application/pdf", filename="split-expenses-combined.pdf")
             if path == "/api/export/person.pdf":
+                self._snapshot()
                 pid = q.get("id", [None])[0]
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
@@ -112,6 +124,21 @@ def _make_handler(store: Store):
 
         def _today(self):
             return datetime.date.today().isoformat()
+
+        def _now_iso(self):
+            return datetime.datetime.now().isoformat(timespec="seconds")
+
+        def _now_stamp(self):
+            return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        def _snapshot(self):
+            """Record an immutable snapshot of the full review state (dedup'd)."""
+            try:
+                history.maybe_snapshot(store.data_dir, store.load_expenses(),
+                                       store.load_settings()["people"],
+                                       self._now_iso(), self._now_stamp())
+            except Exception:
+                pass  # history is best-effort; never block an export
 
         def _person_name(self, pid):
             for p in store.load_settings()["people"]:
@@ -164,6 +191,7 @@ def _make_handler(store: Store):
             share = per_person_totals(expenses).get(pid, 0)
             if share <= 0:
                 return self._send_json({"error": "Nothing to push (their share is $0)"}, 400)
+            self._snapshot()
 
             from src.reports import statements_included
             stmts = statements_included(expenses)
@@ -225,6 +253,7 @@ def _make_handler(store: Store):
             my_id = settings.get("splitwiseUserId")
             if not token or not my_id:
                 return self._send_json({"error": "Splitwise not connected"}, 400)
+            self._snapshot()
             person_map = {p["id"]: p.get("splitwiseUserId") for p in settings["people"]}
             expenses = store.load_expenses()
             pushed, skipped, errors = [], [], []

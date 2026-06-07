@@ -18,6 +18,7 @@
     <nav class="tabs">
       <button class="tab on" data-screen="review">Review</button>
       <button class="tab" data-screen="totals">Totals</button>
+      <button class="tab" data-screen="history">History</button>
       <button class="tab" data-screen="settings">People &amp; Settings</button>
     </nav>
     <div class="appbar-right">
@@ -54,6 +55,15 @@
   <div class="celebrate" id="celebrate"></div>
   <div class="totals-grid" id="totalsList"></div>
   <div class="combined-bar" id="combinedBar"></div>
+</main>
+
+<!-- ===== HISTORY ===== -->
+<main class="screen wrap hidden" id="screen-history">
+  <div class="section-head">
+    <h1>History 🕘</h1>
+    <span class="sub">An immutable snapshot of the whole review is saved each time you export or push. Same state &rarr; same snapshot.</span>
+  </div>
+  <div id="historyList"></div>
 </main>
 
 <!-- ===== PEOPLE & SETTINGS ===== -->

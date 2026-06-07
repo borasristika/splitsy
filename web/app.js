@@ -520,10 +520,33 @@ const uz = $('#uploadZone');
 uz.addEventListener('drop',e=>{ e.preventDefault(); uz.style.borderColor='';
   const f=[...e.dataTransfer.files].find(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf')); handleFile(f); });
 
+/* ---------- history ---------- */
+async function loadHistory(){
+  const host = $('#historyList');
+  host.innerHTML = '<p class="sub">Loading…</p>';
+  const res = await (await fetch('/api/history')).json();
+  const items = res.history || [];
+  if(!items.length){ host.innerHTML = `<div class="empty-note">No history yet. Export a CSV/PDF or push to Splitwise and a snapshot is saved here.</div>`; return; }
+  host.innerHTML = items.map(h=>{
+    const owed = Object.entries(h.owed||{}).map(([pid,a])=>`${personName(pid)} $${a.toFixed(2)}`).join(' · ') || 'no splits';
+    const stmts = (h.statements||[]).join('; ') || '—';
+    return `<div class="hist-card">
+      <div class="hist-head">
+        <span class="hist-when">${h.timestamp}</span>
+        <a class="btn btn-ghost" href="/api/history/file?id=${encodeURIComponent(h.id)}" target="_blank" rel="noopener">Open / download</a>
+      </div>
+      <div class="hist-meta">Total spent <b>$${(h.spent||0).toFixed(2)}</b> · You pay <b>$${(h.you||0).toFixed(2)}</b> · ${h.expenseCount} expenses</div>
+      <div class="hist-meta">Owed: ${owed}</div>
+      <div class="hist-meta hist-stmts">Statements: ${stmts}</div>
+    </div>`;
+  }).join('');
+}
+
 /* ---------- tabs + toast ---------- */
 function showScreen(name){
-  ['review','totals','settings'].forEach(s=> $('#screen-'+s).classList.toggle('hidden', s!==name));
+  ['review','totals','history','settings'].forEach(s=> $('#screen-'+s).classList.toggle('hidden', s!==name));
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.screen===name));
+  if(name==='history') loadHistory();
   window.scrollTo({top:0});
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>showScreen(t.dataset.screen)));

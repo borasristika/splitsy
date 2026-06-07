@@ -233,6 +233,16 @@ button{font-family:var(--font);cursor:pointer;}
 /* "You" card on Totals */
 .you-card{background:linear-gradient(120deg,var(--primary-t),#fff);}
 
+/* History */
+.hist-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  box-shadow:var(--shadow);padding:14px 18px;margin-bottom:12px;}
+.hist-head{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
+.hist-when{font-weight:800;font-size:15px;}
+.hist-head .btn{margin-left:auto;padding:7px 13px;font-size:13px;}
+.hist-meta{font-size:13.5px;color:var(--muted);margin-top:2px;}
+.hist-meta b{color:var(--ink);font-variant-numeric:tabular-nums;}
+.hist-stmts{font-size:12.5px;color:var(--faint);}
+
 /* "assign default partner" nudge on Review */
 .assign-note{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--warn-t);
   border:1px solid #f0d28a;border-radius:var(--r-md);padding:12px 18px;color:var(--warn-d);font-size:14px;}
