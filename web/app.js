@@ -73,8 +73,8 @@ function splitSubtitle(e){
 }
 
 /* ---------- load + persist ---------- */
-async function refresh(){ Object.assign(state, await api.state()); renderAll(); }
-async function persistExpenses(){ const r=await api.saveExpenses(state.expenses); state.totals=r.totals; renderAll(); }
+async function refresh(){ Object.assign(state, await api.state()); await syncScopedTotals(); renderAll(); }
+async function persistExpenses(){ const r=await api.saveExpenses(state.expenses); state.totals=r.totals; await syncScopedTotals(); renderAll(); }
 async function saveRule(matchKey, patch){
   const existing = state.rules[matchKey] || {matchKey, handling:null, category:null};
   state.rules[matchKey] = {...existing, ...patch};
@@ -141,6 +141,13 @@ function renderReview(){
       ${rows.map(rowHTML).join('')}
     </section>`;
   }
+  const splitN = list.filter(e=>e.status==='split').length;
+  const persN = list.filter(e=>e.status==='personal').length;
+  const scopeName = stmtFilter==='ALL' ? 'all statements' : stmtFilter;
+  html += `<div class="cta">
+    <div class="cta-txt"><b>${splitN}</b> to split · <b>${persN}</b> just yours · <span class="cta-sub">${scopeName}</span></div>
+    <button class="btn btn-primary" onclick="showScreen('totals')">See Totals &amp; export →</button>
+  </div>`;
   host.innerHTML = html;
 }
 function rowHTML(e){
@@ -252,26 +259,47 @@ async function saveSplit(){
 }
 
 /* ---------- totals ---------- */
+let totalsScope = 'ALL';     // 'ALL' or a statement source
+let scopedTotals = null;     // server-computed totals for the scoped statement
+async function syncScopedTotals(){
+  if(totalsScope==='ALL'){ scopedTotals=null; return; }
+  if(!statementSources().includes(totalsScope)){ totalsScope='ALL'; scopedTotals=null; return; }
+  const r = await (await fetch('/api/totals?source='+encodeURIComponent(totalsScope))).json();
+  scopedTotals = r.totals;
+}
+async function setTotalsScope(src){ totalsScope=src; await syncScopedTotals(); renderTotals(); }
+function srcQuery(){ return totalsScope==='ALL' ? '' : ('&source='+encodeURIComponent(totalsScope)); }
+
 function renderTotals(){
-  const owedEntries = Object.entries(state.totals||{});
+  const srcs = statementSources();
+  $('#scopeBar').innerHTML = srcs.length ? `<div class="filters" style="margin-bottom:6px">
+      <span class="flabel">Export scope:</span>
+      <button class="fpill ${totalsScope==='ALL'?'on':''}" data-tscope="ALL">All statements</button>
+      ${srcs.map(s=>`<button class="fpill ${totalsScope===s?'on':''}" data-tscope="${escAttr(s)}">${s}</button>`).join('')}
+    </div>` : '';
+
+  const displayTotals = (totalsScope==='ALL') ? (state.totals||{}) : (scopedTotals||{});
+  const scopeExp = (totalsScope==='ALL') ? state.expenses : state.expenses.filter(e=>e.source===totalsScope);
+  const owedEntries = Object.entries(displayTotals);
   const totalOwed = owedEntries.reduce((s,[,v])=>s+v,0);
-  const splitCount = state.expenses.filter(e=>e.status==='split' && e.split.participants.length).length;
-  const cel = $('#celebrate');
-  cel.innerHTML = `<span class="em">${owedEntries.length?'✨':'🫙'}</span>
+  const splitCount = scopeExp.filter(e=>e.status==='split' && e.split.participants.length).length;
+
+  $('#celebrate').innerHTML = `<span class="em">${owedEntries.length?'✨':'🫙'}</span>
     <div>
       <h2>${owedEntries.length?'Nice — that all adds up':'Nothing to split yet'}</h2>
       <p>${owedEntries.length
-          ? `${owedEntries.length} ${owedEntries.length>1?'people':'person'} owe you across ${splitCount} split expense${splitCount!==1?'s':''}.`
+          ? `${owedEntries.length} ${owedEntries.length>1?'people':'person'} owe you across ${splitCount} split expense${splitCount!==1?'s':''}${totalsScope!=='ALL'?' in '+totalsScope:''}.`
           : 'Tag some expenses as split on the Review tab.'}</p>
     </div>
     <div class="tot"><div class="big mono">${money(totalOwed)}</div><div class="lbl">Total owed to you</div></div>`;
 
   const host = $('#totalsList');
   const people = state.settings.people||[];
-  if(!people.length){ host.innerHTML = `<p class="sub">Add people in Settings to see who owes you.</p>`; return; }
+  if(!people.length){ host.innerHTML = `<p class="sub">Add people in Settings to see who owes you.</p>`; $('#combinedBar').innerHTML=''; return; }
   const groups = [{id:0,name:'No group (direct)'}].concat(state.settings.splitwiseGroups||[]);
+  const sq = srcQuery();
   host.innerHTML = people.map(p=>{
-    const owe = state.totals[p.id] || 0;
+    const owe = displayTotals[p.id] || 0;
     const swBlock = state.settings.splitwiseToken ? `
         <div class="field-inline"><span>Splitwise:</span>
           <select class="select" id="grp-${p.id}">${groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')}</select>
@@ -283,11 +311,16 @@ function renderTotals(){
       <div class="who-sub">owes you for their share of split expenses</div>
       <div class="owe-amt"><div class="big">${money(owe)}</div><div class="lbl">owes you</div></div>
       <div class="owe-tools">
-        <button class="btn btn-ghost" onclick="location.href='/api/export/person.csv?id=${encodeURIComponent(p.id)}'">⬇︎ Download CSV</button>
+        <button class="btn btn-primary" onclick="location.href='/api/export/person.pdf?id=${encodeURIComponent(p.id)}${sq}'">⬇︎ PDF</button>
+        <button class="btn btn-ghost" onclick="location.href='/api/export/person.csv?id=${encodeURIComponent(p.id)}${sq}'">CSV</button>
         ${swBlock}
       </div>
     </div>`;
   }).join('');
+
+  $('#combinedBar').innerHTML = `
+    <button class="btn btn-primary" onclick="location.href='/api/export/combined.pdf?x=1${sq}'">⬇︎ Combined PDF</button>
+    <button class="btn btn-ghost" onclick="location.href='/api/export/combined.csv?x=1${sq}'">Combined CSV</button>`;
 }
 
 async function pushSplitwise(pid){
@@ -411,7 +444,9 @@ function showScreen(name){
   window.scrollTo({top:0});
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>showScreen(t.dataset.screen)));
-$('#combinedBtn').addEventListener('click', ()=>location.href='/api/export/combined.csv');
+$('#screen-totals').addEventListener('click', ev=>{
+  const b = ev.target.closest('[data-tscope]'); if(b) setTotalsScope(b.dataset.tscope);
+});
 
 function toast(msg, kind){
   const wrap = $('#toastWrap');

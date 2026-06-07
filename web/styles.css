@@ -212,7 +212,15 @@ button{font-family:var(--font);cursor:pointer;}
 .select:hover{border-color:var(--primary);}
 .btn-sw{background:var(--success);color:#fff;display:inline-flex;align-items:center;gap:7px;}
 .btn-sw:hover{background:var(--success-d);}
-.combined-bar{display:flex;justify-content:flex-end;margin-top:18px;}
+.combined-bar{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+
+/* review "done" call-to-action */
+.cta{display:flex;align-items:center;gap:16px;background:linear-gradient(120deg,var(--primary-t),#fff);
+  border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 22px;margin-top:4px;box-shadow:var(--shadow);}
+.cta-txt{font-size:15px;color:var(--ink-2);}
+.cta-txt b{color:var(--ink);}
+.cta-sub{color:var(--muted);font-size:13.5px;}
+.cta .btn{margin-left:auto;}
 .celebrate{display:flex;align-items:center;gap:14px;background:linear-gradient(120deg,var(--primary-t),#fff);
   border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 22px;margin-top:8px;}
 .celebrate .em{font-size:30px;}

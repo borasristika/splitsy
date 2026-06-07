@@ -2,7 +2,7 @@
 # Launch the Expense Splitter app and open it in the browser.
 set -e
 cd "$(dirname "$0")"
-python3 -m pip install --quiet pypdf >/dev/null 2>&1 || true
+python3 -m pip install --quiet pypdf fpdf2 >/dev/null 2>&1 || true
 (python3 -m src.server) &
 SERVER_PID=$!
 sleep 1

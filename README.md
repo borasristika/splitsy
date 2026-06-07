@@ -20,4 +20,6 @@ Open a Claude Code session in this folder and paste the prompt in `LAUNCH.md`.
 ## Test
     python3 -m unittest discover -s tests -v
 
-Requires Python 3 and `pypdf` (`python3 -m pip install pypdf`).
+Requires Python 3 and the packages in `requirements.txt`
+(`python3 -m pip install -r requirements.txt` — `pypdf` for reading statements,
+`fpdf2` for generating PDF summaries). `start.sh` installs them automatically.

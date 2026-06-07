@@ -2,14 +2,26 @@
 import json
 import os
 import cgi
+import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from src.store import Store
 from src.reports import per_person_totals, per_person_csv, combined_csv
+from src.pdf_export import per_person_pdf, combined_pdf
 from src.ingest import ingest_text
 from src.splitter import compute_shares
 from src import splitwise
+
+
+def _filter_by_source(expenses, source):
+    if not source or source == "ALL":
+        return expenses
+    return [e for e in expenses if e.get("source") == source]
+
+
+def _scope_label(source):
+    return "All statements" if (not source or source == "ALL") else source
 
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web")
 
@@ -34,7 +46,9 @@ def _make_handler(store: Store):
             self.wfile.write(body)
 
         def _send_text(self, text, content_type="text/plain", code=200, filename=None):
-            body = text.encode()
+            self._send_bytes(text.encode(), content_type, code, filename)
+
+        def _send_bytes(self, body, content_type="application/octet-stream", code=200, filename=None):
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             if filename:
@@ -60,20 +74,46 @@ def _make_handler(store: Store):
         def do_GET(self):
             parsed = urlparse(self.path)
             path = parsed.path
+            q = parse_qs(parsed.query)
+            source = q.get("source", [None])[0]
             if path == "/api/state":
                 return self._send_json(self._state())
+            if path == "/api/totals":
+                expenses = _filter_by_source(store.load_expenses(), source)
+                return self._send_json({"totals": per_person_totals(expenses)})
             if path == "/api/export/combined.csv":
-                expenses = store.load_expenses()
+                expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
                 return self._send_text(combined_csv(expenses, people),
                                         "text/csv", filename="combined.csv")
             if path == "/api/export/person.csv":
-                pid = parse_qs(parsed.query).get("id", [None])[0]
-                expenses = store.load_expenses()
+                pid = q.get("id", [None])[0]
+                expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
                 return self._send_text(per_person_csv(expenses, pid, people),
-                                        "text/csv", filename=f"{pid}.csv")
+                                        "text/csv", filename=f"{self._person_name(pid)}.csv")
+            if path == "/api/export/combined.pdf":
+                expenses = _filter_by_source(store.load_expenses(), source)
+                people = store.load_settings()["people"]
+                pdf = combined_pdf(expenses, people, _scope_label(source), self._today())
+                return self._send_bytes(pdf, "application/pdf", filename="split-expenses-combined.pdf")
+            if path == "/api/export/person.pdf":
+                pid = q.get("id", [None])[0]
+                expenses = _filter_by_source(store.load_expenses(), source)
+                people = store.load_settings()["people"]
+                pdf = per_person_pdf(expenses, pid, people, _scope_label(source), self._today())
+                return self._send_bytes(pdf, "application/pdf",
+                                        filename=f"{self._person_name(pid)}-split-expenses.pdf")
             return self._serve_static(path)
+
+        def _today(self):
+            return datetime.date.today().isoformat()
+
+        def _person_name(self, pid):
+            for p in store.load_settings()["people"]:
+                if p["id"] == pid:
+                    return p["name"].replace(" ", "_")
+            return str(pid)
 
         def do_POST(self):
             path = urlparse(self.path).path
