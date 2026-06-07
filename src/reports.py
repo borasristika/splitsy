@@ -13,6 +13,12 @@ def per_person_totals(expenses: list) -> dict:
     return {pid: to_dollars(c) for pid, c in totals_cents.items()}
 
 
+def total_spent(expenses: list) -> float:
+    """Sum of every charge across the given expenses (what actually hit your cards),
+    regardless of how it was split. Exact to the cent."""
+    return to_dollars(sum(to_cents(e["amount"]) for e in expenses))
+
+
 def owner_total(expenses: list) -> float:
     """The owner's ('You') own share across all expenses, in exact cents.
 

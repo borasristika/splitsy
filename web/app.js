@@ -32,7 +32,7 @@ const api = {
 };
 
 /* ---------- state ---------- */
-let state = { expenses:[], rules:{}, settings:{people:[]}, totals:{}, you:0 };
+let state = { expenses:[], rules:{}, settings:{people:[]}, totals:{}, you:0, spent:0 };
 let lastReport = null;
 let bannerDismissed = false;
 let stmtFilter = localStorage.getItem('stmtFilter') || 'ALL';  // which statement is in view
@@ -75,7 +75,7 @@ function splitSubtitle(e){
 /* ---------- load + persist ---------- */
 async function refresh(){ Object.assign(state, await api.state()); await syncScopedTotals(); renderAll(); }
 async function persistExpenses(){
-  const r=await api.saveExpenses(state.expenses); state.totals=r.totals; state.you=r.you;
+  const r=await api.saveExpenses(state.expenses); state.totals=r.totals; state.you=r.you; state.spent=r.spent;
   await syncScopedTotals(); renderAll();
 }
 async function saveRule(matchKey, patch){
@@ -163,7 +163,7 @@ function renderLiveBar(){
   const people = state.settings.people||[];
   // Always the grand totals across ALL statements, straight from the server (exact cents).
   const chips = [
-    `<span class="live-chip you"><span class="dot" style="background:var(--primary)"></span>You pay <span class="amt2 mono">${money(state.you||0)}</span></span>`
+    `<span class="live-chip spent"><span class="dot" style="background:var(--ink)"></span>Total spent <span class="amt2 mono">${money(state.spent||0)}</span></span>`
   ].concat(people.map(p=>
     `<span class="live-chip"><span class="dot" style="background:var(${personColor(p.id)})"></span>${p.name} owes <span class="amt2 mono">${money((state.totals||{})[p.id]||0)}</span></span>`
   ));
@@ -294,11 +294,12 @@ async function saveSplit(){
 let totalsScope = 'ALL';     // 'ALL' or a statement source
 let scopedTotals = null;     // server-computed totals for the scoped statement
 let scopedYou = null;        // owner share for the scoped statement
+let scopedSpent = null;      // total spent for the scoped statement
 async function syncScopedTotals(){
-  if(totalsScope==='ALL'){ scopedTotals=null; scopedYou=null; return; }
-  if(!statementSources().includes(totalsScope)){ totalsScope='ALL'; scopedTotals=null; scopedYou=null; return; }
+  if(totalsScope==='ALL'){ scopedTotals=null; scopedYou=null; scopedSpent=null; return; }
+  if(!statementSources().includes(totalsScope)){ totalsScope='ALL'; scopedTotals=null; scopedYou=null; scopedSpent=null; return; }
   const r = await (await fetch('/api/totals?source='+encodeURIComponent(totalsScope))).json();
-  scopedTotals = r.totals; scopedYou = r.you;
+  scopedTotals = r.totals; scopedYou = r.you; scopedSpent = r.spent;
 }
 async function setTotalsScope(src){ totalsScope=src; await syncScopedTotals(); renderTotals(); }
 function srcQuery(){ return totalsScope==='ALL' ? '' : ('&source='+encodeURIComponent(totalsScope)); }
@@ -330,19 +331,20 @@ function renderTotals(){
   const people = state.settings.people||[];
   const groups = [{id:0,name:'No group (direct)'}].concat(state.settings.splitwiseGroups||[]);
   const sq = srcQuery();
-  const youVal = (totalsScope==='ALL') ? (state.you||0) : (scopedYou||0);
-  const youCard = `<div class="owe-card you-card">
-      <span class="avatar" style="background:var(--primary)">Y</span>
-      <div class="who">You</div>
-      <div class="who-sub">your own share of everything (paid by you)</div>
-      <div class="owe-amt"><div class="big">${money(youVal)}</div><div class="lbl">you pay</div></div>
+  const spentVal = (totalsScope==='ALL') ? (state.spent||0) : (scopedSpent||0);
+  const scopeWord = totalsScope==='ALL' ? 'all statements' : totalsScope;
+  const spentCard = `<div class="owe-card you-card">
+      <span class="avatar" style="background:var(--ink)">$</span>
+      <div class="who">Total spent</div>
+      <div class="who-sub">everything you charged across ${scopeWord}</div>
+      <div class="owe-amt"><div class="big">${money(spentVal)}</div><div class="lbl">spent</div></div>
     </div>`;
   if(!people.length){
-    host.innerHTML = youCard + `<p class="sub">Add people in Settings to split with someone.</p>`;
+    host.innerHTML = spentCard + `<p class="sub">Add people in Settings to split with someone.</p>`;
     $('#combinedBar').innerHTML='';
     return;
   }
-  host.innerHTML = youCard + people.map(p=>{
+  host.innerHTML = spentCard + people.map(p=>{
     const owe = displayTotals[p.id] || 0;
     const swBlock = state.settings.splitwiseToken ? `
         <div class="field-inline"><span>Splitwise:</span>

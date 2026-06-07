@@ -226,8 +226,8 @@ button{font-family:var(--font);cursor:pointer;}
   background:var(--page);border:1px solid var(--line-2);border-radius:999px;padding:6px 12px;}
 .live-chip .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
 .live-chip .amt2{color:var(--ink);}
-.live-chip.you{background:var(--primary-t);border-color:var(--primary-t2);color:var(--primary-d);}
-.live-chip.you .amt2{color:var(--primary-d);}
+.live-chip.spent{background:var(--ink);border-color:var(--ink);color:#fff;}
+.live-chip.spent .amt2{color:#fff;}
 .livebar .btn{margin-left:auto;}
 
 /* "You" card on Totals */

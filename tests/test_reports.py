@@ -1,5 +1,5 @@
 import unittest
-from src.reports import per_person_totals, per_person_csv, combined_csv, owner_total
+from src.reports import per_person_totals, per_person_csv, combined_csv, owner_total, total_spent
 from src.money import to_cents
 
 PEOPLE = [{"id": "p1", "name": "Nitin"}, {"id": "p2", "name": "Priya"}]
@@ -22,6 +22,14 @@ EXPENSES = [
 class TestReports(unittest.TestCase):
     def test_per_person_totals(self):
         self.assertEqual(per_person_totals(EXPENSES), {"p1": 25.00, "p2": 10.00})
+
+    def test_total_spent(self):
+        # 30 + 30 + 9.99
+        self.assertEqual(total_spent(EXPENSES), 69.99)
+
+    def test_total_spent_equals_owner_plus_others(self):
+        others = sum(to_cents(v) for v in per_person_totals(EXPENSES).values())
+        self.assertEqual(to_cents(total_spent(EXPENSES)), to_cents(owner_total(EXPENSES)) + others)
 
     def test_owner_total(self):
         # STARBUCKS 30 split p1 -> you 15; SAFEWAY 30 split p1,p2 -> you 10; personal 9.99 -> you 9.99
