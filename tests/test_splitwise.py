@@ -1,5 +1,5 @@
 import unittest
-from src.splitwise import build_expense_payload, SplitwiseError
+from src.splitwise import build_expense_payload, build_summary_payload, _multipart, SplitwiseError
 
 
 def split_exp(amount, participants, include_self=True, merchant="STARBUCKS", date="2026-01-03"):
@@ -44,6 +44,29 @@ class TestSplitwisePayload(unittest.TestCase):
         e = split_exp(30.00, ["pX"])
         with self.assertRaises(SplitwiseError):
             build_expense_payload(e, my_user_id=999, person_to_splitwise=MAP)
+
+
+class TestSummaryAndMultipart(unittest.TestCase):
+    def test_summary_payload_is_an_iou(self):
+        p = build_summary_payload(1332.10, 999, 111, "Shared expenses for Nitin",
+                                  group_id=0, details="notes")
+        self.assertEqual(p["cost"], "1332.10")
+        self.assertEqual(p["users__0__user_id"], 999)
+        self.assertEqual(p["users__0__paid_share"], "1332.10")
+        self.assertEqual(p["users__0__owed_share"], "0.00")
+        self.assertEqual(p["users__1__user_id"], 111)
+        self.assertEqual(p["users__1__paid_share"], "0.00")
+        self.assertEqual(p["users__1__owed_share"], "1332.10")
+        self.assertEqual(p["details"], "notes")
+
+    def test_multipart_includes_fields_and_file(self):
+        ctype, body = _multipart({"cost": "10.00", "description": "x"},
+                                 "receipt", "r.pdf", b"%PDF-1.4 fake")
+        self.assertTrue(ctype.startswith("multipart/form-data; boundary="))
+        self.assertIn(b'name="cost"', body)
+        self.assertIn(b'10.00', body)
+        self.assertIn(b'filename="r.pdf"', body)
+        self.assertIn(b'%PDF-1.4 fake', body)
 
 
 if __name__ == "__main__":

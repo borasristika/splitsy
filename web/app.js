@@ -367,7 +367,7 @@ function renderTotals(){
         <div class="field-inline"><span>Splitwise:</span>
           <select class="select" id="grp-${p.id}">${groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('')}</select>
         </div>
-        <button class="btn btn-sw" onclick="pushSplitwise('${p.id}')">↗ Push ${p.name} to Splitwise</button>` : '';
+        <button class="btn btn-sw" onclick="pushSummary('${p.id}')">↗ Push ${p.name} to Splitwise</button>` : '';
     return `<div class="owe-card">
       <span class="avatar" style="background:var(${personColor(p.id)})">${initial(p.name)}</span>
       <div class="who">${p.name}</div>
@@ -384,6 +384,26 @@ function renderTotals(){
   $('#combinedBar').innerHTML = `
     <button class="btn btn-primary" onclick="location.href='/api/export/combined.pdf?x=1${sq}'">⬇︎ Combined PDF</button>
     <button class="btn btn-ghost" onclick="location.href='/api/export/combined.csv?x=1${sq}'">Combined CSV</button>`;
+}
+
+async function pushSummary(pid){
+  const p = personById(pid);
+  if(!state.settings.splitwiseToken){ toast('Connect Splitwise first (People & Settings) 🔌'); showScreen('settings'); return; }
+  if(!p.splitwiseUserId){ toast(`Map ${p.name} to a Splitwise friend in Settings first`); showScreen('settings'); return; }
+  const totals = (totalsScope==='ALL') ? (state.totals||{}) : (scopedTotals||{});
+  const owe = totals[pid]||0;
+  if(owe<=0){ toast(`${p.name}'s share is $0 — nothing to push`); return; }
+  const scopeWord = totalsScope==='ALL' ? 'all statements' : totalsScope;
+  const grpSel = document.getElementById('grp-'+pid);
+  const grpName = grpSel ? grpSel.options[grpSel.selectedIndex].text : 'No group';
+  if(!confirm(`Create ONE Splitwise expense charging ${p.name} $${owe.toFixed(2)} for ${scopeWord} (${grpName}), attach the PDF breakdown, and add a comment?\n\nThis creates a real expense in Splitwise.`)) return;
+  toast('Pushing summary to Splitwise…');
+  const res = await (await fetch('/api/splitwise/push_summary', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({personId: pid, groupId: Number(grpSel?grpSel.value:0), source: totalsScope})
+  })).json();
+  if(res.error){ toast('Push failed: '+res.error); return; }
+  toast(`✅ Created Splitwise expense — ${p.name} owes $${(res.amount||owe).toFixed(2)} (PDF + comment attached)`,'good');
 }
 
 async function pushSplitwise(pid){

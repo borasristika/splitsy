@@ -142,7 +142,52 @@ def _make_handler(store: Store):
                 return self._handle_sw_connect()
             if path == "/api/splitwise/push":
                 return self._handle_sw_push()
+            if path == "/api/splitwise/push_summary":
+                return self._handle_sw_push_summary()
             return self._send_json({"error": "not found"}, 404)
+
+        def _handle_sw_push_summary(self):
+            data = self._read_json()
+            pid = data.get("personId")
+            group_id = data.get("groupId") or 0
+            source = data.get("source")
+            settings = store.load_settings()
+            token = settings.get("splitwiseToken")
+            my_id = settings.get("splitwiseUserId")
+            if not token or not my_id:
+                return self._send_json({"error": "Splitwise not connected"}, 400)
+            person = next((p for p in settings["people"] if p["id"] == pid), None)
+            if not person or not person.get("splitwiseUserId"):
+                return self._send_json({"error": "Map this person to a Splitwise friend first"}, 400)
+
+            expenses = _filter_by_source(store.load_expenses(), source)
+            share = per_person_totals(expenses).get(pid, 0)
+            if share <= 0:
+                return self._send_json({"error": "Nothing to push (their share is $0)"}, 400)
+
+            from src.reports import statements_included
+            stmts = statements_included(expenses)
+            scope_desc = "; ".join(stmts) if stmts else "all statements"
+            name = person["name"]
+            description = f"Shared expenses for {name}"
+            details = (f"{name}'s share of shared expenses. Statements: {scope_desc}. "
+                       f"Total: ${share:.2f}. Itemized breakdown attached as PDF.")
+            payload = splitwise.build_summary_payload(share, my_id, person["splitwiseUserId"],
+                                                      description, group_id, details[:1000])
+            pdf = per_person_pdf(expenses, pid, settings["people"], self._today())
+            try:
+                exp_id = splitwise.create_expense_with_receipt(
+                    token, payload, pdf, f"{name.replace(' ', '_')}-split-expenses.pdf")
+                lines = [f"{name} owes ${share:.2f} for shared expenses."]
+                for s in stmts:
+                    sub = per_person_totals(_filter_by_source(expenses, s)).get(pid, 0)
+                    lines.append(f"  - {s}: ${sub:.2f}")
+                lines.append("Full itemized breakdown attached as a PDF.")
+                splitwise.create_comment(token, exp_id, "\n".join(lines))
+            except splitwise.SplitwiseError as ex:
+                return self._send_json({"error": str(ex)}, 400)
+            return self._send_json({"ok": True, "expenseId": exp_id,
+                                    "amount": share, "person": name})
 
         def _handle_sw_connect(self):
             token = (self._read_json().get("token") or "").strip()
