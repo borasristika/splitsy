@@ -32,10 +32,11 @@ const api = {
 };
 
 /* ---------- state ---------- */
-let state = { expenses:[], rules:{}, settings:{people:[]}, totals:{} };
+let state = { expenses:[], rules:{}, settings:{people:[]}, totals:{}, you:0 };
 let lastReport = null;
 let bannerDismissed = false;
 let stmtFilter = localStorage.getItem('stmtFilter') || 'ALL';  // which statement is in view
+let liveTotals = { totals:{}, you:0 };  // server-computed (exact cents) for the Review live bar
 
 /* ---------- category + people metadata ---------- */
 const CAT_META = {
@@ -73,14 +74,21 @@ function splitSubtitle(e){
 }
 
 /* ---------- load + persist ---------- */
-async function refresh(){ Object.assign(state, await api.state()); await syncScopedTotals(); renderAll(); }
-async function persistExpenses(){ const r=await api.saveExpenses(state.expenses); state.totals=r.totals; await syncScopedTotals(); renderAll(); }
+async function refresh(){ Object.assign(state, await api.state()); await syncScopedTotals(); await refreshLiveTotals(); renderAll(); }
+async function persistExpenses(){
+  const r=await api.saveExpenses(state.expenses); state.totals=r.totals; state.you=r.you;
+  await syncScopedTotals(); await refreshLiveTotals(); renderAll();
+}
+async function refreshLiveTotals(){
+  const r = await (await fetch('/api/totals?source='+encodeURIComponent(stmtFilter))).json();
+  liveTotals = { totals:r.totals||{}, you:r.you||0 };
+}
 async function saveRule(matchKey, patch){
   const existing = state.rules[matchKey] || {matchKey, handling:null, category:null};
   state.rules[matchKey] = {...existing, ...patch};
   await api.saveRules(state.rules);
 }
-function renderAll(){ renderBanner(); renderReview(); renderTotals(); renderPeople(); renderSplitwise(); }
+function renderAll(){ renderBanner(); renderReview(); renderLiveBar(); renderTotals(); renderPeople(); renderSplitwise(); }
 
 /* ---------- banner ---------- */
 function renderBanner(){
@@ -106,7 +114,7 @@ function renderBanner(){
 const escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 function statementSources(){ return [...new Set(state.expenses.map(e=>e.source))]; }
 function visibleExpenses(){ return stmtFilter==='ALL' ? state.expenses : state.expenses.filter(e=>e.source===stmtFilter); }
-function setStmtFilter(src){ stmtFilter=src; localStorage.setItem('stmtFilter',src); renderReview(); }
+async function setStmtFilter(src){ stmtFilter=src; localStorage.setItem('stmtFilter',src); await refreshLiveTotals(); renderReview(); renderLiveBar(); }
 
 function renderReview(){
   const host = $('#reviewList');
@@ -141,14 +149,24 @@ function renderReview(){
       ${rows.map(rowHTML).join('')}
     </section>`;
   }
-  const splitN = list.filter(e=>e.status==='split').length;
-  const persN = list.filter(e=>e.status==='personal').length;
+  host.innerHTML = html;
+}
+
+function renderLiveBar(){
+  const host = $('#liveBar'); if(!host) return;
+  if(!state.expenses.length){ host.innerHTML=''; return; }
+  const people = state.settings.people||[];
+  const chips = [
+    `<span class="live-chip you"><span class="dot" style="background:var(--primary)"></span>You <span class="amt2 mono">${money(liveTotals.you)}</span></span>`
+  ].concat(people.map(p=>
+    `<span class="live-chip"><span class="dot" style="background:var(${personColor(p.id)})"></span>${p.name} owes <span class="amt2 mono">${money(liveTotals.totals[p.id]||0)}</span></span>`
+  ));
   const scopeName = stmtFilter==='ALL' ? 'all statements' : stmtFilter;
-  html += `<div class="cta">
-    <div class="cta-txt"><b>${splitN}</b> to split · <b>${persN}</b> just yours · <span class="cta-sub">${scopeName}</span></div>
+  host.innerHTML = `<div class="livebar">
+    <div class="live-head">Running totals<span class="live-scope">${scopeName}</span></div>
+    <div class="live-chips">${chips.join('')}</div>
     <button class="btn btn-primary" onclick="showScreen('totals')">See Totals &amp; export →</button>
   </div>`;
-  host.innerHTML = html;
 }
 function rowHTML(e){
   const meta = catMeta(e.category);
@@ -261,11 +279,12 @@ async function saveSplit(){
 /* ---------- totals ---------- */
 let totalsScope = 'ALL';     // 'ALL' or a statement source
 let scopedTotals = null;     // server-computed totals for the scoped statement
+let scopedYou = null;        // owner share for the scoped statement
 async function syncScopedTotals(){
-  if(totalsScope==='ALL'){ scopedTotals=null; return; }
-  if(!statementSources().includes(totalsScope)){ totalsScope='ALL'; scopedTotals=null; return; }
+  if(totalsScope==='ALL'){ scopedTotals=null; scopedYou=null; return; }
+  if(!statementSources().includes(totalsScope)){ totalsScope='ALL'; scopedTotals=null; scopedYou=null; return; }
   const r = await (await fetch('/api/totals?source='+encodeURIComponent(totalsScope))).json();
-  scopedTotals = r.totals;
+  scopedTotals = r.totals; scopedYou = r.you;
 }
 async function setTotalsScope(src){ totalsScope=src; await syncScopedTotals(); renderTotals(); }
 function srcQuery(){ return totalsScope==='ALL' ? '' : ('&source='+encodeURIComponent(totalsScope)); }
@@ -295,10 +314,21 @@ function renderTotals(){
 
   const host = $('#totalsList');
   const people = state.settings.people||[];
-  if(!people.length){ host.innerHTML = `<p class="sub">Add people in Settings to see who owes you.</p>`; $('#combinedBar').innerHTML=''; return; }
   const groups = [{id:0,name:'No group (direct)'}].concat(state.settings.splitwiseGroups||[]);
   const sq = srcQuery();
-  host.innerHTML = people.map(p=>{
+  const youVal = (totalsScope==='ALL') ? (state.you||0) : (scopedYou||0);
+  const youCard = `<div class="owe-card you-card">
+      <span class="avatar" style="background:var(--primary)">Y</span>
+      <div class="who">You</div>
+      <div class="who-sub">your own share of everything (paid by you)</div>
+      <div class="owe-amt"><div class="big">${money(youVal)}</div><div class="lbl">you pay</div></div>
+    </div>`;
+  if(!people.length){
+    host.innerHTML = youCard + `<p class="sub">Add people in Settings to split with someone.</p>`;
+    $('#combinedBar').innerHTML='';
+    return;
+  }
+  host.innerHTML = youCard + people.map(p=>{
     const owe = displayTotals[p.id] || 0;
     const swBlock = state.settings.splitwiseToken ? `
         <div class="field-inline"><span>Splitwise:</span>

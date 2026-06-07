@@ -214,13 +214,24 @@ button{font-family:var(--font);cursor:pointer;}
 .btn-sw:hover{background:var(--success-d);}
 .combined-bar{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
 
-/* review "done" call-to-action */
-.cta{display:flex;align-items:center;gap:16px;background:linear-gradient(120deg,var(--primary-t),#fff);
-  border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 22px;margin-top:4px;box-shadow:var(--shadow);}
-.cta-txt{font-size:15px;color:var(--ink-2);}
-.cta-txt b{color:var(--ink);}
-.cta-sub{color:var(--muted);font-size:13.5px;}
-.cta .btn{margin-left:auto;}
+/* live running-totals bar (sticky on Review) */
+.livebar{position:sticky;bottom:14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 18px;margin-top:14px;
+  box-shadow:0 18px 44px -22px rgba(60,20,40,.55);}
+.live-head{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  display:flex;flex-direction:column;line-height:1.25;}
+.live-scope{font-size:11px;font-weight:700;color:var(--faint);text-transform:none;letter-spacing:0;}
+.live-chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.live-chip{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:13.5px;color:var(--ink-2);
+  background:var(--page);border:1px solid var(--line-2);border-radius:999px;padding:6px 12px;}
+.live-chip .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+.live-chip .amt2{color:var(--ink);}
+.live-chip.you{background:var(--primary-t);border-color:var(--primary-t2);color:var(--primary-d);}
+.live-chip.you .amt2{color:var(--primary-d);}
+.livebar .btn{margin-left:auto;}
+
+/* "You" card on Totals */
+.you-card{background:linear-gradient(120deg,var(--primary-t),#fff);}
 .celebrate{display:flex;align-items:center;gap:14px;background:linear-gradient(120deg,var(--primary-t),#fff);
   border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 22px;margin-top:8px;}
 .celebrate .em{font-size:30px;}

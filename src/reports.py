@@ -13,6 +13,24 @@ def per_person_totals(expenses: list) -> dict:
     return {pid: to_dollars(c) for pid, c in totals_cents.items()}
 
 
+def owner_total(expenses: list) -> float:
+    """The owner's ('You') own share across all expenses, in exact cents.
+
+    Personal expenses are fully the owner's; for split expenses the owner's share is
+    the amount minus everyone else's shares. By construction owner_total plus the sum
+    of per_person_totals always equals the sum of all expense amounts.
+    """
+    cents = 0
+    for e in expenses:
+        amount_cents = to_cents(e["amount"])
+        if e.get("status") == "personal":
+            cents += amount_cents
+        elif e.get("status") == "split":
+            others = sum(to_cents(v) for v in compute_shares(e).values())
+            cents += amount_cents - others
+    return to_dollars(cents)
+
+
 def _fmt(amount: float) -> str:
     return f"{amount:.2f}"
 

@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 from src.store import Store
-from src.reports import per_person_totals, per_person_csv, combined_csv
+from src.reports import per_person_totals, per_person_csv, combined_csv, owner_total
 from src.pdf_export import per_person_pdf, combined_pdf
 from src.ingest import ingest_text
 from src.splitter import compute_shares
@@ -68,6 +68,7 @@ def _make_handler(store: Store):
                 "rules": store.load_rules(),
                 "settings": store.load_settings(),
                 "totals": per_person_totals(expenses),
+                "you": owner_total(expenses),
             }
 
         # ---- routing ----
@@ -80,7 +81,8 @@ def _make_handler(store: Store):
                 return self._send_json(self._state())
             if path == "/api/totals":
                 expenses = _filter_by_source(store.load_expenses(), source)
-                return self._send_json({"totals": per_person_totals(expenses)})
+                return self._send_json({"totals": per_person_totals(expenses),
+                                        "you": owner_total(expenses)})
             if path == "/api/export/combined.csv":
                 expenses = _filter_by_source(store.load_expenses(), source)
                 people = store.load_settings()["people"]
@@ -120,7 +122,9 @@ def _make_handler(store: Store):
             if path == "/api/expenses":
                 data = self._read_json()
                 store.save_expenses(data["expenses"])
-                return self._send_json({"ok": True, "totals": per_person_totals(data["expenses"])})
+                return self._send_json({"ok": True,
+                                        "totals": per_person_totals(data["expenses"]),
+                                        "you": owner_total(data["expenses"])})
             if path == "/api/rules":
                 data = self._read_json()
                 store.save_rules(data["rules"])
